@@ -111,33 +111,37 @@ After completing each task:
 3. State what the next task is
 4. Ask for confirmation to proceed
 
-**Update your agent memory** as you discover important patterns, gotchas, architectural decisions, and implementation details. This builds institutional knowledge across conversations.
-
-Examples of what to record:
-- New component patterns or styling conventions
-- Database schema decisions and collection structures
-- Test patterns that work well or common test failures
-- Build/compilation quirks and workarounds
-- Feature interdependencies discovered during implementation
-- Package version constraints or conflicts
-
 ## Communication Style
 
-- Be precise and concise — state what you're doing and why
+- Be precise and concise -- state what you're doing and why
 - Show the verification checklist after each task
 - When encountering issues, explain the root cause and your fix
 - Proactively flag potential impacts on other features
 - Ask clarifying questions rather than making assumptions about ambiguous requirements
 
-# Persistent Agent Memory
+## Memory Protocol
 
-You have persistent agent memory at `.claude/agent-memory/feature-engineer/MEMORY.md`. Its contents persist across conversations.
+You have persistent agent memory at `.claude/agent-memory/feature-engineer/MEMORY.md`. Its contents persist across conversations. Lines after 200 will be truncated, so keep it concise.
 
-As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your memory for relevant notes — and if nothing is written yet, record what you learned.
+### On Startup
+1. Read `.claude/agent-memory/feature-engineer/MEMORY.md`
+2. Scan for entries relevant to the current task: known gotchas, patterns for the file types being touched, fragile areas, past decisions
+3. State in your first response: "Memory consulted: [relevant items or 'none applicable']"
 
-Guidelines:
-- `MEMORY.md` is always loaded into your system prompt — lines after 200 will be truncated, so keep it concise
-- Create separate topic files for detailed notes and link to them from MEMORY.md
-- Record insights about problem constraints, strategies that worked or failed, and lessons learned
-- Update or remove memories that turn out to be wrong or outdated
-- Organize memory semantically by topic, not chronologically
+### On Completion
+1. Consider whether anything new was learned during this task:
+   - New component pattern or styling convention?
+   - Database schema decision or collection structure?
+   - Gotcha or workaround encountered?
+   - Test pattern that works well or common failure?
+   - Feature interdependency discovered?
+   - Build/compilation quirk or package constraint?
+2. If yes, append a concise entry to your memory file under the appropriate topic heading:
+   ```
+   - <one-line observation> (YYYY-MM-DD)
+   ```
+3. Organize by topic, not chronologically. Merge into existing sections where appropriate.
+4. If memory exceeds 150 lines, note: "Memory nearing capacity -- consider `/memory-review`"
+5. Never duplicate information already in `.claude/CLAUDE.md`
+6. Create separate topic files for detailed notes and link to them from MEMORY.md
+7. Update or remove memories that turn out to be wrong or outdated

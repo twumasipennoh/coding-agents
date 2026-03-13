@@ -180,6 +180,9 @@ Skills are user-facing shortcuts. Agents are pipeline building blocks. Each skil
 - `/feature-status` -> reads FEATURE_PROMPTS.md progress (standalone)
 - `/security-check` -> standalone security audit (standalone)
 - `/deploy` -> deployment checklist
+- `/memory-review` -> memory-curator agent (audit memory health, find promotion candidates)
+- `/memory-promote` -> standalone (graduate memory entries to CLAUDE.md)
+- `/memory-status` -> standalone (quick memory health dashboard)
 
 ### Standalone Automation Rules
 These are superseded by the NON-NEGOTIABLE GATES section above. Whether inside or outside the pipeline, ALL 4 gates (test-runner, pattern-enforcer, security-reviewer, doc-updater) MUST run after any code changes. No conditional triggers -- they always run.
@@ -200,6 +203,9 @@ Announce format: "This is a [task type] -- running [agent name]." Then proceed i
 | Security audit / check | **security-reviewer** (standalone) |
 | Deploy / release | Pre-deployment checklist |
 | Explain how something works | No agent -- use user journey walkthrough style (see Communication Style) |
+
+### Orchestration Patterns
+For non-feature tasks (debugging, refactoring, research, security hardening), see `.claude/orchestration/ORCHESTRATION.md` for predefined workflows. The Feature Sprint (Pattern A) is the default pipeline described above.
 
 ### Workflow Rules
 - **Plan Mode Default**: Enter plan mode for any task with 3+ steps or architectural decisions. By default, use the **requirements-clarifier** agent (`.claude/agents/requirements-clarifier.md`) as the planning mechanism -- it walks through 5 phases (Explore, Brainstorm, Evaluate, Plan, Test Strategy), asking questions at each phase and waiting for the user to respond before proceeding to the next. If something goes sideways mid-implementation, STOP and re-plan through the requirements-clarifier rather than pushing through.

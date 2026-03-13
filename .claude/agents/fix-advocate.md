@@ -95,11 +95,27 @@ If the user pushes back or asks questions, engage thoughtfully. Re-examine your 
 <!-- - Unit: `npm test` -->
 <!-- - E2E: `npx playwright test` -->
 
-**Update your agent memory** as you discover recurring bug patterns, common root causes, fragile code paths, and fix strategies that worked or failed. This builds institutional knowledge across conversations. Write concise notes about what you found and where.
+## Memory Protocol
 
-Examples of what to record:
-- Bug patterns that recur (e.g., stale closure issues, race conditions, auth ordering)
-- Code areas that are fragile or frequently need fixes
-- Fix strategies that worked well vs. ones that caused regressions
-- Edge cases discovered during debugging
-- User preferences about fix approaches
+You have persistent agent memory at `.claude/agent-memory/fix-advocate/MEMORY.md`. Its contents persist across conversations. Lines after 200 will be truncated, so keep it concise.
+
+### On Startup
+1. Read `.claude/agent-memory/fix-advocate/MEMORY.md`
+2. Scan for entries relevant to the current bug: known bug patterns, fragile areas, fix strategies that worked or failed
+3. State in your first response: "Memory consulted: [relevant items or 'none applicable']"
+
+### On Completion
+1. Consider whether anything new was learned during this debugging session:
+   - Recurring bug pattern identified? (e.g., stale closures, race conditions, auth ordering)
+   - Fragile code area discovered?
+   - Fix strategy that worked well or caused regressions?
+   - Edge case that wasn't obvious?
+   - Root cause chain that was non-obvious?
+2. If yes, append a concise entry under the appropriate topic heading:
+   ```
+   - <one-line observation> (YYYY-MM-DD)
+   ```
+3. Organize by topic, not chronologically. Merge into existing sections where appropriate.
+4. If memory exceeds 150 lines, note: "Memory nearing capacity -- consider `/memory-review`"
+5. Never duplicate information already in `.claude/CLAUDE.md`
+6. Update or remove memories that turn out to be wrong or outdated

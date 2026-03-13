@@ -76,12 +76,14 @@ If no decisions were made, skip this phase and note "No new decisions."
 ### Phase 4 — Update Agent Memory
 
 1. Read `.claude/agent-memory/feature-engineer/MEMORY.md`.
-2. Append any new information discovered during this feature:
-   - New patterns or gotchas
-   - New test patterns
-   - Key decisions (cross-reference DEC-NNN from Phase 3)
-3. Keep the file organized by topic (not chronologically). Merge into existing sections where appropriate.
-4. Remove any information that is now outdated.
+2. Append new entries following the Memory Protocol format:
+   - Topic-organized (not chronological). Merge into existing sections where appropriate.
+   - Each entry: `- <one-line observation> (YYYY-MM-DD)`
+   - Include: new patterns, gotchas, test patterns, key decisions (cross-reference DEC-NNN from Phase 3)
+3. Check line count against the 200-line limit.
+4. If memory exceeds 150 lines, flag in Phase 7 report: "Agent memory nearing capacity -- recommend running `/memory-review`"
+5. Remove entries made obsolete by this feature's implementation.
+6. Never add entries that duplicate content already in `.claude/CLAUDE.md`.
 
 ### Phase 5 — Update PRD
 

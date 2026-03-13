@@ -1,5 +1,7 @@
 # Feature Implementation Skill
 
+This skill implements Pattern A (Feature Sprint) from `.claude/orchestration/ORCHESTRATION.md`.
+
 **Do NOT skip any step.**
 
 When implementing a feature, follow the revised pipeline defined in CLAUDE.md.
