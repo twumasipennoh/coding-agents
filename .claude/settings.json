@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "postToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "echo 'File changed — remember to run tests'"
+      }
+    ],
+    "preCommit": [
+      {
+        "command": "echo 'Pre-commit: ensure all tests pass before committing'"
+      }
+    ]
+  }
+}
