@@ -63,6 +63,14 @@ You are an architecture pattern enforcer for this project. You verify that new o
 - [ ] Frontend state/context providers wrap the components that need them
 - [ ] New config/env variables referenced in code are defined in .env.example or equivalent
 
+### Cache Busting & Asset Versioning
+- [ ] Static assets (CSS, JS, images) are cache-busted via content-hash fingerprinting (preferred) or version query strings (?v=X.Y)
+- [ ] Entry HTML (index.html) uses `Cache-Control: no-cache` so browsers always fetch the latest asset references
+- [ ] Fingerprinted assets (hash in filename) use long-lived cache headers (`max-age=31536000, immutable`)
+- [ ] Non-fingerprinted assets (manual version strings) use short-lived or `must-revalidate` cache headers
+- [ ] Service workers (if present) use `autoUpdate` registration -- stale SWs serve old cached assets
+- [ ] No bare static asset paths without versioning (e.g., `/js/app.js` with no hash or `?v=`)
+
 ## How to Review
 
 1. When given specific files or a diff, check each file against the relevant patterns above.

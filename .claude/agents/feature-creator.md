@@ -73,6 +73,7 @@ After implementation, verify:
 - [ ] All new UI components/pages are rendered in a parent component and reachable via navigation or routing
 - [ ] All new services are instantiated and called by their intended consumer (route handler, CLI command, or another service)
 - [ ] No orphan files -- every new file is imported somewhere outside of itself
+- [ ] All new static assets are cache-busted -- fingerprinted by build tool or versioned with query string (?v=X.Y) in templates
 - [ ] Mark the task checkbox as `[x]` in `FEATURE_PROMPTS.md`
 
 ## Rules
