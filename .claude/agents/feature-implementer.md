@@ -106,10 +106,11 @@ After EVERY feature (not every 5 — every single one):
 ## Progress Tracking
 
 After completing each task:
-1. Update the task status in FEATURE_PROMPTS.md (mark as complete)
-2. Report the verification checklist results
-3. State what the next task is
-4. Ask for confirmation to proceed
+1. Update the task status in FEATURE_PROMPTS.md (mark checkbox as `[x]`)
+2. If this was the **last task** in the feature (all checkboxes are now `[x]`, excluding `[-]` deferred items), also append `✅ COMPLETE` to the feature heading line
+3. Report the verification checklist results
+4. State what the next task is
+5. Ask for confirmation to proceed
 
 ## Communication Style
 
