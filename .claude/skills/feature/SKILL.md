@@ -50,7 +50,7 @@ Run the **doc-updater** agent -> performs all 7 phases:
 7. Flags items needing human attention (CLAUDE.md, agent configs)
 
 ### Step 7 — User Gate
-Mark the task checkbox as complete in FEATURE_PROMPTS.md. Present the doc-updater's summary and GATES completion log to the user. Ask whether to proceed to the next feature.
+Mark the task checkbox as complete in FEATURE_PROMPTS.md. If all tasks in the feature are now `[x]` (excluding `[-]` deferred items), also append `✅ COMPLETE` to the feature heading. Present the doc-updater's summary and GATES completion log to the user. Ask whether to proceed to the next feature.
 
 ### Step 8 — Commit
 After user confirms go, stage and commit all changes with a descriptive commit message summarizing the feature/task implemented.
@@ -64,7 +64,7 @@ Do not mark a task complete until:
 - [ ] Pattern review clean
 - [ ] Security review clean
 - [ ] TESTING_<FEATURE_NAME>.md exists
-- [ ] FEATURE_PROMPTS.md updated with completion notes
+- [ ] FEATURE_PROMPTS.md updated with completion notes and `✅ COMPLETE` on heading (if all tasks done)
 - [ ] DECISIONS.md updated (if applicable)
 - [ ] Agent memory updated
 - [ ] PRD updated to reflect implementation
