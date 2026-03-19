@@ -40,32 +40,34 @@ This ensures that if the conversation is lost or context resets, the documented 
 
 ### Phase 2 — BRAINSTORM (Explore Implementation Options)
 
-**Goal:** Present 2-3 distinct approaches so the user can make an informed choice.
+**Goal:** Present 2-3 distinct approaches so the user can make an informed choice. Describe each option through the lens of the user's experience, not code internals.
 
 For each option, describe:
-- **Approach**: What changes at a high level
-- **Pros**: Why this option is good
-- **Cons**: Trade-offs, risks, or limitations
-- **Example**: A concrete before/after snippet or pseudocode
+- **What it looks like for the user**: Walk through the experience — what the user sees, taps, and gets back. Describe before vs. after as a mini user story.
+- **Why it's a good fit**: What problems it solves, what gets easier or faster for the user.
+- **What you give up**: Trade-offs in plain language — what might feel slower, what gets more complex, what limits it has. If a technical concept is relevant, name it but explain it in parentheses (e.g., "the app would store your progress in a separate organized list — technically a Firestore subcollection — which makes lookups faster but adds a small amount of storage").
+- **How it compares**: One sentence positioning this option against the others.
+
+Do NOT use code snippets, pseudocode, or file-level implementation details. Describe the experience and the trade-offs, not the implementation.
 
 Present options as a numbered list. Ask the user which approach they prefer.
 
 ### Phase 3 — EVALUATE (Optimize for Long-Term Quality)
 
-**Goal:** Pressure-test the chosen approach against quality criteria.
+**Goal:** Pressure-test the chosen approach against quality criteria. Frame each criterion as "what this means for your experience" — keep it grounded in what the user will notice. If a technical term is needed, define it in context.
 
 Walk through each criterion with the user:
 
-| Criterion | Question to Address |
-|-----------|-------------------|
-| **Speed / Runtime** | Does this add latency to any user-facing flow? |
-| **Space** | Does this add new database collections, fields, or cached data? Is storage bounded? |
-| **Backwards Compatibility** | Will existing data still work? Do we need a migration? |
-| **Maintainability** | Does this follow existing patterns? Will the next developer understand it? |
-| **Scalability** | If the user has 1000 items, does this still perform well? |
-| **Security** | Does this introduce any redirect, XSS, or injection vectors? |
+| What we're checking | How to explain it to the user |
+|---|---|
+| **Speed** | Will anything feel slower? Which screens or actions might take longer, and by how much? (e.g., "Saving a habit will take about the same time, but opening Insights might take an extra half-second while it crunches the numbers") |
+| **Storage & data** | Does this create new data behind the scenes? Is there a limit to how much it can grow? Could it become a problem over time? |
+| **Existing data** | Will everything you've already saved still work exactly the same? If not, what needs to change and will it happen automatically? |
+| **Future changes** | Does this follow the patterns already in the app, or does it introduce something new that future work would need to account for? |
+| **At scale** | If you had 10x more data (habits, tracks, videos, etc.), would this still work smoothly? Where would it start to struggle? |
+| **Security** | Does this touch login, personal data, or links to external services? If so, what protections are in place? |
 
-Flag any concerns and propose mitigations.
+Flag any concerns and propose mitigations in the same accessible style — explain what could go wrong and what safeguards will prevent it.
 
 ### Phase 4 — PLAN (What the Change Means)
 
