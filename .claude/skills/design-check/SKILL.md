@@ -60,3 +60,4 @@ List details for any issues found.
 - This is a static analysis scan, not a visual regression test.
 - Delegates to the `frontend-design-reviewer` agent for the detailed checklist review.
 - False positives in test files are expected — note them but don't flag as critical.
+- For generating fixes or new UI that meets high design standards, use the `frontend-design` plugin (`~/.claude/plugins/.../frontend-design`) — it ensures distinctive, production-grade aesthetics and avoids generic AI patterns.

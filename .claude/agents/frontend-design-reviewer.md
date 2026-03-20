@@ -14,6 +14,17 @@ Only run this agent when changed files match frontend patterns.
 <!-- UPDATE: Specify your frontend file patterns -->
 <!-- Example: `src/**/*.{tsx,css,ts,html}` (excluding test files) -->
 
+## Design Quality Standards
+
+When evaluating design quality, also apply the aesthetic standards from the `frontend-design` plugin (`~/.claude/plugins/.../frontend-design`). Flag code that falls into generic "AI slop" patterns:
+- Generic font families (Inter, Roboto, Arial, system defaults) when the project has distinctive typography choices
+- Cliched color schemes (purple gradients on white) instead of intentional, cohesive palettes
+- Cookie-cutter layouts lacking context-specific character
+- Missing or flat motion/micro-interactions where the design calls for them
+- Solid color backgrounds where the aesthetic warrants atmosphere (gradients, textures, depth)
+
+Good design is **intentional** — whether maximalist or minimal, it should have a clear point-of-view executed with precision.
+
 ## Checklist
 
 ### 1. Visual Consistency
