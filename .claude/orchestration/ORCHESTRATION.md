@@ -27,12 +27,12 @@ The existing 8-step feature implementation pipeline.
 2. pre-flight -- validate project health
 3. test-creator -- write failing tests
 4. feature-creator -- implement to pass tests
-5. pattern-enforcer + security-reviewer -- parallel review
+5. pattern-enforcer + security-reviewer + frontend-design-reviewer (conditional) -- parallel review
 6. test-runner -- full suite
 7. doc-updater -- sync all docs
 8. User gate -- confirm, then commit
 
-**Gates:** ALL 5 non-negotiable gates apply (fix-advocate for bugs, test-runner, pattern-enforcer, security-reviewer, doc-updater)
+**Gates:** ALL 6 non-negotiable gates apply (fix-advocate for bugs, test-runner, pattern-enforcer, security-reviewer, frontend-design-reviewer conditional, doc-updater)
 
 **Trigger:** `/feature` or "implement feature N"
 
@@ -47,7 +47,7 @@ For debugging and fixing bugs. The fix-advocate drives the process.
 2. test-creator -- write regression test for the bug (if no existing test covers it)
 3. Implement the approved fix
 4. test-runner -- verify fix + no regressions
-5. pattern-enforcer + security-reviewer -- review the fix (parallel)
+5. pattern-enforcer + security-reviewer + frontend-design-reviewer (conditional) -- review the fix (parallel)
 6. doc-updater -- update docs if the fix changed behavior
 
 **Gates:**
@@ -69,7 +69,8 @@ For code cleanup, pattern migration, or technical debt reduction.
 4. test-runner -- full suite. **BLOCKING: zero tolerance for regressions.**
 5. pattern-enforcer -- re-verify, confirm violations resolved
 6. security-reviewer -- if refactor touched auth, API, or data access
-7. doc-updater -- Phase 4 only (update agent memory with new patterns)
+7. frontend-design-reviewer -- if refactor touched UI files
+8. doc-updater -- Phase 4 only (update agent memory with new patterns)
 
 **Gates:**
 - test-runner is BLOCKING (zero regressions)

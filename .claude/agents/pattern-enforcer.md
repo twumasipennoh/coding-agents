@@ -32,8 +32,7 @@ You are an architecture pattern enforcer for this project. You verify that new o
 
 ### Frontend / UI Components
 - [ ] Follow project's component patterns and styling conventions
-- [ ] Use established design tokens / CSS variables
-- [ ] Responsive across target breakpoints
+- [ ] Use established design tokens / CSS variables (detailed design audit deferred to frontend-design-reviewer)
 
 ### Tests
 - [ ] Follow project's test naming and organization conventions

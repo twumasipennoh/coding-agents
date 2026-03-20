@@ -50,14 +50,16 @@ After ANY code changes -- whether via `/feature`, feature-implementer, direct im
 1. **test-runner** -- Full test suite across all layers. All tests must pass. BLOCKING.
 2. **pattern-enforcer** -- Must report no VIOLATIONS. BLOCKING.
 3. **security-reviewer** -- Must report no CRITICAL findings. BLOCKING.
-4. **doc-updater** -- Must complete all applicable doc-sync phases. BLOCKING.
+4. **frontend-design-reviewer** -- CONDITIONAL: only when changed files match frontend patterns. Must report no CRITICAL findings. BLOCKING on CRITICAL.
+5. **doc-updater** -- Must complete all applicable doc-sync phases. BLOCKING.
 
 ### Enforcement
 - For bug fixes: Do NOT write any fix code until fix-advocate has completed Steps 1-6 and received user approval.
 - Do NOT present work as complete or ask the user to review until all gates have run and passed.
 - If ANY gate reports issues, fix them and re-run before proceeding.
 - After all gates pass, print the completion log:
-  > GATES: fix-advocate ✓ | test-runner ✓ | pattern-enforcer ✓ | security-reviewer ✓ | doc-updater ✓
+  > GATES: fix-advocate ✓ | test-runner ✓ | pattern-enforcer ✓ | security-reviewer ✓ | frontend-design-reviewer ✓ | doc-updater ✓
+  > (When no frontend files changed: frontend-design-reviewer SKIPPED)
 
 ---
 
@@ -143,7 +145,7 @@ When implementing a feature, execute this pipeline in order:
 1. **pre-flight** -> Validates project health before starting: test suite green, docs fresh, agent configs consistent, next task dependencies met. BLOCKING if tests fail.
 2. **test-creator** -> Reads the task spec from FEATURE_PROMPTS.md, writes failing tests based on "Tests to Write First"
 3. **feature-creator** -> Implements code to make the failing tests pass, follows "Implementation Steps"
-4. **pattern-enforcer** + **security-reviewer** -> Run in PARALLEL (both read-only). ALWAYS run both -- no conditions, no exceptions. Fix any findings before proceeding.
+4. **pattern-enforcer** + **security-reviewer** + **frontend-design-reviewer** -> Run in PARALLEL (all read-only). pattern-enforcer and security-reviewer ALWAYS run. frontend-design-reviewer only runs if changes touch frontend files. Fix any findings before proceeding.
 5. **test-runner** -> Runs the full test suite across all layers. Must be all green.
 6. **doc-updater** -> Performs all 7 doc-sync phases:
    - Phase 1: Writes TESTING_<FEATURE_NAME>.md in docs/prompts/
@@ -167,6 +169,7 @@ When implementing a feature, execute this pipeline in order:
 | feature-implementer | Orchestrates full feature implementation | Yes |
 | pattern-enforcer | Checks codebase conventions | No (report only) |
 | security-reviewer | Static security analysis | No (report only) |
+| frontend-design-reviewer | Checks design quality, a11y, responsive, UX | No (report only) |
 | test-runner | Runs test suites, reports results | No (report only) |
 | doc-updater | Doc sync: TESTING, FEATURE_PROMPTS, DECISIONS, agent memory, PRD, README | No (docs only) |
 
@@ -179,6 +182,7 @@ Skills are user-facing shortcuts. Agents are pipeline building blocks. Each skil
 - `/checkpoint` -> validates current feature + pre-flight for next feature
 - `/feature-status` -> reads FEATURE_PROMPTS.md progress (standalone)
 - `/security-check` -> standalone security audit (standalone)
+- `/design-check` -> frontend-design-reviewer (standalone design audit)
 - `/deploy` -> deployment checklist
 - `/memory-review` -> memory-curator agent (audit memory health, find promotion candidates)
 - `/memory-promote` -> standalone (graduate memory entries to CLAUDE.md)
@@ -197,6 +201,7 @@ Announce format: "This is a [task type] -- running [agent name]." Then proceed i
 | Implement / build / add a feature | **requirements-clarifier** first, then full pipeline |
 | Bug report / error / something broken | **fix-advocate** first (before any fix code) |
 | Review code / check patterns | **pattern-enforcer** + **security-reviewer** (parallel) |
+| UI/design review / check design | **frontend-design-reviewer** (standalone) |
 | Run / check tests | **test-runner** |
 | Update / sync docs | **doc-updater** |
 | Create prompts from PRD | **prompt-builder** |
