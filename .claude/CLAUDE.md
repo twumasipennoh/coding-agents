@@ -127,6 +127,37 @@ Logs are the primary debugging tool in production. They must surface actionable 
 ## DEBUGGING TO-DOs
 - When a user reports an error, focus on the actual error message first before investigating infrastructure issues.
 
+## FRONTEND UX STANDARDS
+
+These patterns are mandatory for all new frontend work across all projects. Adapt syntax to your stack (Tailwind vs vanilla CSS).
+
+### Loading States — Skeleton Loaders (Not Spinners)
+- Use pulse-animated skeleton placeholders matching content shape — not spinners or "Loading..." text
+- Skeletons prevent layout shift (CLS) by reserving exact space
+
+### Tap Feedback — active:scale + Optimistic UI
+- All tappable elements must scale down slightly on press (e.g., `scale(0.97)` on active/press state)
+- Optimistic UI: update UI immediately on user action, confirm with server, rollback on error
+
+### Toast — Floating, Swipe-to-Dismiss, Undo
+- Floating toast system (not inline alerts/banners)
+- Destructive actions MUST show undo toast with 5-second undo window
+- Swipe-to-dismiss gesture support
+- Respect `prefers-reduced-motion`
+
+### Infinite Scroll — Cursor-Based + IntersectionObserver
+- Unbounded lists use cursor-based pagination with IntersectionObserver sentinel
+- Show skeleton rows while loading next page
+
+### Responsive Typography — clamp() Fluid Sizing
+- Use CSS `clamp(min, preferred, max)` for font sizes — not fixed px + breakpoints
+
+### PWA — Install-Ready, Offline-Capable
+- Web app manifest with icons, theme color, standalone display
+- Service worker: cache-first static, network-first navigation
+- Never cache authenticated API responses
+- Offline fallback page
+
 ## AUTOMATION RULES
 
 ### Requirements Clarification (Before Any Feature or Bug Fix)

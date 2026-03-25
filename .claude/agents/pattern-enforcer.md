@@ -53,6 +53,10 @@ You are an architecture pattern enforcer for this project. You verify that new o
 - [ ] No XSS vectors in template rendering or DOM manipulation
 - [ ] No open redirect vulnerabilities
 
+### Frontend UX Patterns (see CLAUDE.md "FRONTEND UX STANDARDS")
+- [ ] No generic spinners or "Loading..." text for page/list loading — use skeleton loaders
+- [ ] Destructive action handlers use undo toast — not just confirm dialogs
+
 ### Integration & Wiring
 - [ ] Every new function/class is imported and invoked by at least one consumer (not just defined)
 - [ ] New API routes are registered in the app's router/blueprint -- verify the route appears in the URL map

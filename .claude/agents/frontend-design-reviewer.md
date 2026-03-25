@@ -87,6 +87,14 @@ Good design is **intentional** — whether maximalist or minimal, it should have
 - [ ] Subtle transitions (150-300ms duration)
 - [ ] No animations blocking user interaction
 
+### 11. UX Pattern Standards (Mandatory — see CLAUDE.md "FRONTEND UX STANDARDS")
+- [ ] Loading states use skeleton loaders (pulse-animated placeholders) — no spinners or "Loading..." text
+- [ ] All tappable elements have active/press scale feedback with transition
+- [ ] Destructive actions (delete, remove) trigger undo toast — not just confirm dialog
+- [ ] Unbounded list pages use cursor-based infinite scroll with IntersectionObserver sentinel
+- [ ] Font sizes use `clamp()` fluid values — no new fixed px font sizes
+- [ ] PWA manifest and service worker cover new routes/assets
+
 ## How to Review
 
 1. When given specific files or a diff, check each file against the relevant checklist items above.
