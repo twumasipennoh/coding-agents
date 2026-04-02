@@ -77,6 +77,12 @@ After ANY code changes -- whether via `/feature`, feature-implementer, direct im
 
 - Put the prompts in a folder called prompts
 
+- **FEATURE_PROMPTS.md Status Tracking**: When creating, completing, or updating a feature in `FEATURE_PROMPTS.md`, always update **all four** status indicators in the file:
+  1. **Table of Contents** — Each TOC entry has a status prefix: `✅` (complete) or `⏳` (incomplete). Update when feature status changes. New features get `⏳`.
+  2. **Dependency Tree** — The dependency chart uses `✓` (complete) or `⏳` (incomplete) per feature line. Update when feature status changes.
+  3. **Feature Heading** — Append `✅ COMPLETE` to the `# Feature N — ...` heading when all tasks are done. Normalize any other markers (`✓`, `<!-- COMPLETE -->`, `[COMPLETED]`) to `✅ COMPLETE`.
+  4. **Task Headings & Checkboxes** — Mark `[ ]` → `[x]` for completed items. Append `✅` to `## Task N.M — ...` headings when all their checkboxes are `[x]`.
+
 - **Backend->UI Feature Ordering**: For every backend feature developed, the corresponding UI must be created immediately afterwards. Features in FEATURE_PROMPTS.md must alternate between backend and UI tasks. Never batch all backend work before UI -- each backend capability must have its UI counterpart implemented and tested before moving to the next feature.
 
 - For every feature implemented, run through tests at all levels and fix any bugs
