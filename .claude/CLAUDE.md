@@ -18,7 +18,7 @@ Example of the wrong style:
 When deploying, always verify: 1) correct deploy target/alias, 2) environment variables point to correct project, 3) all tests pass. Never deploy to production unless explicitly asked.
 
 ## Workflow / Feature Pipeline
-- Follow the project's feature implementation pipeline using the agents defined in `.claude/agents/`. The pipeline order is: **requirements-clarifier** -> **pre-flight** -> **test-creator** -> **feature-creator** -> **pattern-enforcer** + **security-reviewer** (parallel) -> **test-runner** -> **doc-updater** -> user gate -> commit. Each agent's full specification lives in its `.md` file -- read it before invoking. Do NOT skip pipeline steps even if they seem unnecessary.
+- Follow the project's feature implementation pipeline using the agents defined in `.claude/agents/`. The pipeline order is: **requirements-clarifier** -> **monitoring-spec-validator** -> **mockup-designer** (UI/UX visual gate) -> **pre-flight** -> **test-creator** -> **feature-creator** -> **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** + **frontend-design-reviewer** (parallel) -> **test-runner** -> **doc-updater** -> user gate -> commit. Each agent's full specification lives in its `.md` file -- read it before invoking. Do NOT skip pipeline steps even if they seem unnecessary.
 - Before implementing a feature, verify the actual state of the codebase. Do not assume docs are accurate -- check the code. If user references task numbers that don't exist, clarify before proceeding.
 
 ## Code Style / Guidelines
@@ -50,15 +50,16 @@ After ANY code changes -- whether via `/feature`, feature-implementer, direct im
 1. **test-runner** -- Full test suite across all layers. All tests must pass. BLOCKING.
 2. **pattern-enforcer** -- Must report no VIOLATIONS. BLOCKING.
 3. **security-reviewer** -- Must report no CRITICAL findings. BLOCKING.
-4. **frontend-design-reviewer** -- CONDITIONAL: only when changed files match frontend patterns. Must report no CRITICAL findings. BLOCKING on CRITICAL.
-5. **doc-updater** -- Must complete all applicable doc-sync phases. BLOCKING.
+4. **monitoring-spec-validator** -- Must ensure a valid 'monitoring_spec.md' is present. BLOCKING.
+5. **frontend-design-reviewer** -- CONDITIONAL: only when changed files match frontend patterns. Must report no CRITICAL findings. BLOCKING on CRITICAL.
+6. **doc-updater** -- Must complete all applicable doc-sync phases. BLOCKING.
 
 ### Enforcement
 - For bug fixes: Do NOT write any fix code until fix-advocate has completed Steps 1-6 and received user approval.
 - Do NOT present work as complete or ask the user to review until all gates have run and passed.
 - If ANY gate reports issues, fix them and re-run before proceeding.
 - After all gates pass, print the completion log:
-  > GATES: fix-advocate ✓ | test-runner ✓ | pattern-enforcer ✓ | security-reviewer ✓ | frontend-design-reviewer ✓ | doc-updater ✓
+  > GATES: fix-advocate ✓ | test-runner ✓ | pattern-enforcer ✓ | security-reviewer ✓ | monitoring-spec-validator ✓ | frontend-design-reviewer ✓ | doc-updater ✓
   > (When no frontend files changed: frontend-design-reviewer SKIPPED)
 
 ---
@@ -182,7 +183,7 @@ When implementing a feature, execute this pipeline in order:
 1. **pre-flight** -> Validates project health before starting: test suite green, docs fresh, agent configs consistent, next task dependencies met. BLOCKING if tests fail.
 2. **test-creator** -> Reads the task spec from FEATURE_PROMPTS.md, writes failing tests based on "Tests to Write First"
 3. **feature-creator** -> Implements code to make the failing tests pass, follows "Implementation Steps"
-4. **pattern-enforcer** + **security-reviewer** + **frontend-design-reviewer** -> Run in PARALLEL (all read-only). pattern-enforcer and security-reviewer ALWAYS run. frontend-design-reviewer only runs if changes touch frontend files. Fix any findings before proceeding.
+4. **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** + **frontend-design-reviewer** -> Run in PARALLEL (all read-only). pattern-enforcer and security-reviewer ALWAYS run. frontend-design-reviewer only runs if changes touch frontend files. Fix any findings before proceeding.
 5. **test-runner** -> Runs the full test suite across all layers. Must be all green.
 6. **doc-updater** -> Performs all 7 doc-sync phases:
    - Phase 1: Writes TESTING_<FEATURE_NAME>.md in docs/prompts/
@@ -199,6 +200,7 @@ When implementing a feature, execute this pipeline in order:
 | Agent | Role | Writes Code? |
 |-------|------|-------------|
 | requirements-clarifier | Engineering method Q&A before implementation | No (conversation only) |
+| mockup-designer | Generates standalone UI mockups & captures screenshots | HTML/Tailwind only |
 | pre-flight | Pre-feature validation (tests, docs, configs) | No (read-only) |
 | prompt-builder | PRD -> FEATURE_PROMPTS.md | No (docs only) |
 | test-creator | Writes failing tests (TDD) | Tests only |
@@ -208,6 +210,8 @@ When implementing a feature, execute this pipeline in order:
 | security-reviewer | Static security analysis | No (report only) |
 | frontend-design-reviewer | Checks design quality, a11y, responsive, UX | No (report only) |
 | test-runner | Runs test suites, reports results | No (report only) |
+| monitoring-spec-validator | Enforces monitoring specification creation and validation | No (report only) |
+| test-flow-writer | Writes TESTING_<FEATURE_NAME>.md after feature completion | No (docs only) |
 | doc-updater | Doc sync: TESTING, FEATURE_PROMPTS, DECISIONS, agent memory, PRD, README | No (docs only) |
 
 ### Skill -> Agent Mapping
@@ -235,7 +239,7 @@ Announce format: "This is a [task type] -- running [agent name]." Then proceed i
 
 | User intent | Agent(s) to invoke |
 |---|---|
-| Implement / build / add a feature | **requirements-clarifier** first, then full pipeline |
+| Implement / build / add a feature | **requirements-clarifier** first, then **monitoring-spec-validator**, then full pipeline |
 | Bug report / error / something broken | **fix-advocate** first (before any fix code) |
 | Review code / check patterns | **pattern-enforcer** + **security-reviewer** (parallel) |
 | UI/design review / check design | **frontend-design-reviewer** (standalone) |
@@ -243,6 +247,7 @@ Announce format: "This is a [task type] -- running [agent name]." Then proceed i
 | Update / sync docs | **doc-updater** |
 | Create prompts from PRD | **prompt-builder** |
 | Security audit / check | **security-reviewer** (standalone) |
+| Ensure monitoring specs are in place / Validate monitoring | **monitoring-spec-validator** |
 | Deploy / release | Pre-deployment checklist |
 | Explain how something works | No agent -- use user journey walkthrough style (see Communication Style) |
 
