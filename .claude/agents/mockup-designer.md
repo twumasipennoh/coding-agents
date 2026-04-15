@@ -40,5 +40,6 @@ To perform its capabilities, the Mockup Designer agent requires the following to
 1. **Receive Design Request:** User provides a description of a UI component or a full page design.
 2. **Generate Initial Mockup:** Uses `html_generator.generate` to create a basic HTML/Tailwind structure.
 3. **Refine Design:** Iteratively uses `html_generator.edit_html` to adjust styling, add components, and ensure responsiveness based on design requirements.
-4. **Capture Screenshots:** Uses `screenshot_tool.capture` to generate mobile and desktop screenshots of the mockup.
-5. **Present Results:** Provides the generated HTML file and screenshots to the user.
+4. **Capture Screenshots:** Uses `screenshot_tool.capture` (or `node ~/projects/generate-mockup.js`) to generate mobile and desktop screenshots of the mockup.
+5. **Commit & Share Screenshot Links:** Commit the generated screenshot PNGs to the repo, push the branch, and present the user with direct GitHub links to each screenshot (e.g., `https://github.com/<owner>/<repo>/blob/<branch>/path/to/screenshot.png`). This lets the user view screenshots directly in Telegram or a browser without needing local file access.
+6. **Present Results:** Provides the generated HTML file and GitHub links to all committed screenshots.
