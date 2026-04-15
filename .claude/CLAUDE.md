@@ -262,6 +262,13 @@ For non-feature tasks (debugging, refactoring, research, security hardening), se
 ### E2E Tests (MANDATORY)
 E2E tests MUST be run for any change that touches UI, auth flow, client-side JS, routing, or API endpoints. Do NOT skip them -- they are a separate testing layer that catches bugs unit tests miss (race conditions, redirect behavior, module loading order, nav visibility).
 
+**Emulator Setup (REQUIRED before running E2E tests):**
+The Firebase emulator MUST be running before E2E tests start. Without it, tests will fail on Firestore/Auth calls. This is a known blocker — do not skip this step.
+1. **Start emulator before tests:** `firebase emulators:start` (in a background process or separate terminal)
+2. **Wait for emulator readiness** before launching the test suite (check that emulator ports are listening)
+3. **Shut down emulator after tests complete:** kill the emulator process once the test run finishes (success or failure). Do not leave orphan emulator processes running.
+4. If the emulator fails to start, check for port conflicts (`lsof -i :8080` / `lsof -i :9099`) and kill any zombie processes before retrying.
+
 **When to run E2E tests:**
 - Any change to UI templates or components
 - Any change to auth logic (login, signup, logout, session handling)
@@ -275,3 +282,12 @@ Before deploying, ALL of the following must pass:
 2. Integration tests -- BLOCKING
 3. E2E tests -- BLOCKING
 4. No unresolved lint or type errors
+
+### Post-Deployment Summary (MANDATORY)
+After every successful deployment, produce a deploy summary that includes:
+1. **Cache-busting version** — the build hash, version string, or timestamp used to bust cached assets (check `package.json` version, build output, or `?v=` query params)
+2. **Live website link** — the environment-specific URL (staging, prod, dev — use the project's Firebase hosting URL or custom domain)
+3. **Environment deployed** — staging, prod, or dev
+4. **Key changes deployed** — 1-3 bullet points summarizing what shipped
+
+Present this summary to the user immediately after deploy completes.
