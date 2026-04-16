@@ -55,6 +55,20 @@ Mark the task checkbox as complete in FEATURE_PROMPTS.md. If all tasks in the fe
 ### Step 8 — Commit
 After user confirms go, stage and commit all changes with a descriptive commit message summarizing the feature/task implemented.
 
+### Step 9 — PR & Summary
+
+After the commit:
+1. Push the branch: `git push -u origin <branch>`
+2. Create a PR via `gh pr create` with:
+   - Title derived from the feature name and task
+   - Body containing: summary of changes, gates completion log, test counts
+3. Present the user with:
+   ```
+   ✅ Feature complete and committed.
+   PR: https://github.com/<owner>/<repo>/pull/<number>
+   ```
+4. Include the PR link in the final summary sent to the user.
+
 ## Completion Criteria
 
 Do not mark a task complete until:
@@ -70,3 +84,4 @@ Do not mark a task complete until:
 - [ ] PRD updated to reflect implementation
 - [ ] README updated (if new routes/endpoints/features)
 - [ ] User confirms go/no-go
+- [ ] PR created and link shared with user
