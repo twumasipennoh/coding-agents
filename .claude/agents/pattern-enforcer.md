@@ -74,6 +74,13 @@ You are an architecture pattern enforcer for this project. You verify that new o
 - [ ] Service workers (if present) use `autoUpdate` registration -- stale SWs serve old cached assets
 - [ ] No bare static asset paths without versioning (e.g., `/js/app.js` with no hash or `?v=`)
 
+### User Experience & Onboarding
+- [ ] New UI surfaces have a meaningful empty state — not a blank screen. Show what the user can do to populate it.
+- [ ] Features use progressive disclosure — show the essential action first; advanced options go behind a menu, accordion, or secondary screen.
+- [ ] If a feature requires user input or setup, provide inline hints, placeholder text, or a brief explanation. The UI should teach itself.
+- [ ] Before adding a new navigation item, modal, or page — verify this cannot be added to an existing surface. Prefer extending over adding.
+- [ ] Every user action has visible feedback (toast, state change, animation). The user should never wonder "did that work?"
+
 ## How to Review
 
 1. When given specific files or a diff, check each file against the relevant patterns above.
