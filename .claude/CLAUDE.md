@@ -177,6 +177,8 @@ When the user requests a new feature or bug fix, run the **requirements-clarifie
 
 Only proceed to the implementation pipeline after the user confirms the summary is correct.
 
+**User experience is a first-class concern.** During requirements clarification, evaluate: Is the feature intuitive without explanation? Does it need guidance (tooltips, empty states, first-run hints)? Could it be bundled with an existing feature to reduce complexity? The goal is that users can discover and use features without a manual.
+
 ### Feature Implementation Pipeline (Test-First)
 When implementing a feature, execute this pipeline in order:
 

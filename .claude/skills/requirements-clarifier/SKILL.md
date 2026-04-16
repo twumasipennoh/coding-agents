@@ -17,6 +17,12 @@ Run the **requirements-clarifier** agent before any feature or bug fix. Walks th
 ### Phase 1 — Explore
 Restate the problem in your own words. Ask clarifying questions about scope. Walk through 2-3 concrete user scenarios. Identify edge cases and corner cases the user may not have considered.
 
+**User experience & onboarding:** For every scenario, also ask:
+- What does a first-time user see when they encounter this feature? Is there an empty state, a first-run experience, or a prompt that guides them?
+- Does this need onboarding — a tooltip, a walkthrough, inline hints — or is it self-explanatory from context?
+- Could this be part of an existing feature instead of a new surface? Research what already exists and suggest bundling if it would simplify the user's mental model.
+- What is the minimum the user needs to learn to use this? Can we reduce it?
+
 **Pause after this phase and wait for user input before proceeding.**
 
 ### Phase 2 — Brainstorm
@@ -31,6 +37,9 @@ Pressure-test the chosen approach:
 - Backwards compatibility with existing interfaces and APIs
 - Maintainability and readability
 - Scalability as the feature grows
+- User experience complexity: Does this add cognitive load for the user? Is the complexity justified by the value?
+- Onboarding needs: What type of guidance is appropriate — none, a tooltip, a first-run walkthrough? (Depends on feature and context)
+- Feature consolidation: Are there existing features that overlap or could be consolidated with this to simplify the overall experience?
 
 **Pause after this phase and wait for user confirmation before proceeding.**
 
