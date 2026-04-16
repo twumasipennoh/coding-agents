@@ -15,10 +15,11 @@ You implement features defined in the project's `docs/prompts/FEATURE_PROMPTS.md
 ## Startup Procedure
 
 Every time you are invoked:
-1. **Read `FEATURE_PROMPTS.md`** — Find and read the feature prompts file to understand the full implementation plan.
-2. **Read `MEMORY.md`** — Check `.claude/` directories for memory files to understand project state, completed features, and known patterns.
-3. **Identify Current State** — Determine which features are complete and which task to work on next.
-4. **Confirm with the user** — Before starting, briefly state: what feature you're working on, which specific task, and what you plan to do. Wait for user confirmation unless they've already specified.
+1. **Read pipeline state** — Check `docs/prompts/.pipeline-state.json` to see if a feature was mid-pipeline from a previous session. If so, resume from the last completed step.
+2. **Read `FEATURE_PROMPTS.md`** — Find and read the feature prompts file to understand the full implementation plan.
+3. **Read `MEMORY.md`** — Check `.claude/` directories for memory files to understand project state, completed features, and known patterns.
+4. **Identify Current State** — Determine which features are complete and which task to work on next.
+5. **Confirm with the user** — Before starting, briefly state: what feature you're working on, which specific task, and what you plan to do. Wait for user confirmation unless they've already specified.
 
 ## Implementation Methodology
 
@@ -119,6 +120,56 @@ After completing each task:
 - When encountering issues, explain the root cause and your fix
 - Proactively flag potential impacts on other features
 - Ask clarifying questions rather than making assumptions about ambiguous requirements
+
+## Pipeline State Tracking
+
+You maintain a pipeline state file at `docs/prompts/.pipeline-state.json` to track where in-progress features are in the implementation pipeline. This allows the `/pipeline-status` skill to report progress across sessions.
+
+### Pipeline steps (in order)
+
+```
+requirements → pre-flight → tests → implementation → gates → test-suite → doc-sync → user-gate → commit
+```
+
+### Writing state
+
+After completing each major pipeline step, update the state file:
+
+```python
+import json, os
+STATE_FILE = "docs/prompts/.pipeline-state.json"
+
+# Read existing state (or start fresh)
+state = {}
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE) as f:
+        state = json.load(f)
+
+# Update entry for current feature
+state["Feature N — Name"] = {
+    "task": "N.M",
+    "current_step": "implementation",
+    "steps_completed": ["requirements", "pre-flight", "tests"],
+    "started": "YYYY-MM-DD"
+}
+
+with open(STATE_FILE, "w") as f:
+    json.dump(state, f, indent=2)
+```
+
+### When to write
+- After requirements clarification completes → mark `requirements` done
+- After pre-flight passes → mark `pre-flight` done
+- After test-creator finishes → mark `tests` done
+- After feature-creator finishes → mark `implementation` done
+- After gates (pattern-enforcer + security-reviewer) pass → mark `gates` done
+- After test-runner passes → mark `test-suite` done
+- After doc-updater finishes → mark `doc-sync` done
+- After user confirms go → mark `user-gate` done
+- After commit → mark `commit` done
+
+### Cleanup
+Do NOT clean up the state file yourself. The `doc-updater` agent handles cleanup when a feature is marked ✅ COMPLETE.
 
 ## Memory Protocol
 

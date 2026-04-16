@@ -67,6 +67,30 @@ Run all 7 phases in order. Do NOT skip phases.
    > - Test count: <X unit, Y integration, Z e2e tests added>
    ```
 
+### Pipeline State Cleanup
+
+After marking a feature as ✅ COMPLETE in Phase 2, clean up the pipeline state file:
+
+1. Read `docs/prompts/.pipeline-state.json`.
+2. If the file exists and contains an entry for the just-completed feature, **remove that entry**.
+3. If the file is now empty (`{}`), delete the file entirely.
+4. This prevents state file bloat from accumulating completed features.
+
+```python
+import json, os
+STATE_FILE = "docs/prompts/.pipeline-state.json"
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE) as f:
+        state = json.load(f)
+    # Remove the completed feature entry (match by feature heading)
+    state = {k: v for k, v in state.items() if "FEATURE_NAME" not in k}  # match actual name
+    if state:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f, indent=2)
+    else:
+        os.remove(STATE_FILE)
+```
+
 ### Phase 3 — Update Decision Log
 
 1. Read `docs/DECISIONS.md` (create it if it doesn't exist).
