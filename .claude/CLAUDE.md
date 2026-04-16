@@ -262,6 +262,8 @@ For non-feature tasks (debugging, refactoring, research, security hardening), se
 ### E2E Tests (MANDATORY)
 E2E tests MUST be run for any change that touches UI, auth flow, client-side JS, routing, or API endpoints. Do NOT skip them -- they are a separate testing layer that catches bugs unit tests miss (race conditions, redirect behavior, module loading order, nav visibility).
 
+**Backend verification (REQUIRED):** E2E tests must not only assert UI state — they must also verify that the backend behaved correctly. After a user action in the browser, assert that the expected backend side-effects actually occurred (e.g., Firestore document created/updated/deleted, auth state changed, Cloud Function triggered). This ensures the frontend and backend are wired together correctly end-to-end. A test that only checks "the success toast appeared" without confirming the data actually landed in Firestore is incomplete.
+
 **Emulator Setup (REQUIRED before running E2E tests):**
 The Firebase emulator MUST be running before E2E tests start. Without it, tests will fail on Firestore/Auth calls. This is a known blocker — do not skip this step.
 1. **Start emulator before tests:** `firebase emulators:start` (in a background process or separate terminal)
