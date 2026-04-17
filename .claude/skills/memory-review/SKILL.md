@@ -1,6 +1,6 @@
 # Memory Review
 
-Perform a comprehensive audit of all agent memory files and produce actionable recommendations.
+Perform a comprehensive health check of all persistent project knowledge — agent memory, CLAUDE.md, DECISIONS.md, and monitoring_spec.md — and produce actionable recommendations.
 
 Delegate to the **memory-curator** agent (`.claude/agents/memory-curator.md`).
 
@@ -16,6 +16,7 @@ Delegate to the **memory-curator** agent (`.claude/agents/memory-curator.md`).
 - `/memory-review --quick` — Summary only: line counts, health status, top 3 candidates
 - `/memory-review --stale` — Focus on stale/outdated entries only
 - `/memory-review --candidates` — Show only promotion candidates (scored entries)
+- `/memory-review --docs` — Project docs health only: CLAUDE.md, DECISIONS.md, monitoring_spec.md analysis
 
 ## When to Use
 
