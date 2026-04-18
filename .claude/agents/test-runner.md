@@ -47,6 +47,23 @@ After running all test layers, perform this validation:
    - Message: "UI/route files were modified but no E2E tests were run. Feature cannot proceed. The test-creator must write E2E tests before this gate will pass."
 4. If zero E2E tests ran and NO UI files were changed, report: "E2E gate: PASS (no UI files in changeset)"
 
+## Emulator / Service Lifecycle (REQUIRED for E2E)
+
+If E2E tests require external services (Firebase emulators, dev servers, databases), manage their lifecycle:
+
+### Before E2E tests:
+1. **Check for port conflicts**: Verify required ports aren't already in use by another project (e.g., `lsof -i :8080 -i :9099`).
+2. **If ports are in use**: Report the conflict to the user with the PID and process name. Let them decide whether to kill it or skip. Do NOT kill another project's processes without user confirmation.
+3. **Start required services**: Launch emulators/servers in background processes. Wait for readiness (ports listening) before proceeding.
+
+### After E2E tests (success or failure):
+1. **Shut down services you started**: Kill processes cleanly. Do not leave orphan processes running.
+
+### Never:
+- Skip E2E tests because a required service isn't running — that's your job to start it.
+- Leave processes running after the test run completes.
+- Kill another project's services without asking the user first.
+
 ## Rules
 - Do NOT fix code. Only report results.
 - Do NOT modify test files.
