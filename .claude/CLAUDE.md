@@ -273,6 +273,10 @@ The Firebase emulator MUST be running before E2E tests start. Without it, tests 
 3. **Shut down emulator after tests complete:** kill the emulator process once the test run finishes (success or failure). Do not leave orphan emulator processes running.
 4. If the emulator fails to start, check for port conflicts (`lsof -i :8080` / `lsof -i :9099`) and kill any zombie processes before retrying.
 
+
+**Test Execution Ordering (serial vs. parallel):**
+Tests that share state (authenticated session, browser context, entities created by prior tests) MUST use serial/ordered execution. Tests that are independent (each creates own data, no shared state) should run in parallel for efficiency. Serial is required for multi-step CRUD flows; parallel is preferred when tests don't interact. For Playwright, use `test.describe.serial()`. For pytest, use `@pytest.mark.order(N)`. The test-creator agent's output documents which groups are serial and why — respect that annotation when running or modifying tests.
+
 **When to run E2E tests:**
 - Any change to UI templates or components
 - Any change to auth logic (login, signup, logout, session handling)

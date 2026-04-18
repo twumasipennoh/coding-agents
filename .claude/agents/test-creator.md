@@ -41,6 +41,29 @@ You are a test-first agent for this project. You write failing tests based on ta
 - Include docstrings or comments describing the expected behavior
 - Cover happy path, edge cases, and error cases as specified in the task
 
+## Test Execution Ordering — Serial vs. Parallel
+
+Choose the right execution mode for each test group. Getting this wrong causes flaky tests or unnecessary slowness.
+
+### Use serial/ordered execution when:
+- Tests share state (same authenticated session, shared browser context, accumulated database mutations)
+- Tests form a multi-step flow (create → edit → verify → delete) where each step depends on the previous
+- Tests share entities created in earlier tests
+- Tests must run in a specific order to avoid data conflicts
+
+### Use parallel execution (default) when:
+- Each test creates its own data and fixtures independently
+- Tests exercise unrelated features with no shared state
+- Tests are pure assertions against independent functions or components
+
+### Rules:
+- **Annotate serial groups**: Add a comment/docstring explaining WHY tests must be serial (e.g., `// Serial: tests share authenticated session and created entity`)
+- **Don't over-serialize**: If tests within an ordered group are actually independent, split them. Serial is safer but slower — use it only when ordering matters.
+- **Playwright E2E**: Use `test.describe.serial()` for flows that share state. Use regular `test.describe()` for independent tests.
+- **pytest**: Use `@pytest.mark.order(N)` or class-level ordering when tests must run sequentially.
+- **Vitest/Jest unit tests**: Should almost always be parallel (default). Only use sequential ordering if tests mutate shared module-level state (rare — prefer test isolation).
+- **Document in output**: When listing test files in your output, note which test groups are serial and why.
+
 ## Test Quality Rules
 
 - Every test must have a clear assertion — no tests that just "don't raise"
