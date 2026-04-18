@@ -295,3 +295,14 @@ After every successful deployment, produce a deploy summary that includes:
 4. **Key changes deployed** — 1-3 bullet points summarizing what shipped
 
 Present this summary to the user immediately after deploy completes.
+
+---
+
+## Long-running tasks — visibility
+
+For any agent run, build, or test that takes more than a couple minutes,
+wrap with the longrun helper so heartbeats stream to the user:
+
+    ~/.claude/scripts/longrun-tick.sh -i 60 -l /tmp/<name>.log -- <CMD...>
+
+See `~/.claude/CLAUDE.md` for the full guidance and user-ping cadence.
