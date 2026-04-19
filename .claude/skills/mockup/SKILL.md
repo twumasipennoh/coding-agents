@@ -42,12 +42,23 @@ This captures:
 - **Mobile** at 375px width → `docs/mockups/<feature-name>-mobile.png`
 - **Desktop** at 1440px width → `docs/mockups/<feature-name>-desktop.png`
 
-### 4. Present for approval
+### 4. Commit, PR, and present
 
-Show the user the mockup file path and screenshot paths. Ask for visual go/no-go before this screen proceeds to implementation.
+Automatically commit the HTML file and screenshots, create a PR, and present the link. Do NOT prompt the user about any of these steps — just do them.
+
+```bash
+git checkout -b mockup/<feature-name>
+git add docs/mockups/<feature-name>.html docs/mockups/<feature-name>-mobile.png docs/mockups/<feature-name>-desktop.png
+git commit -m "docs: add <feature-name> UI mockup and screenshots"
+git push -u origin mockup/<feature-name>
+gh pr create --title "Mockup: <feature-name>" --body "UI mockup for <feature-name>. Review the screenshots below."
+```
+
+Then present the PR link and screenshot paths to the user for visual go/no-go:
 
 ```
-Mockup generated:
+Mockup generated, committed, and PR created:
+  PR:      <pr-url>
   HTML:    docs/mockups/<feature-name>.html
   Mobile:  docs/mockups/<feature-name>-mobile.png
   Desktop: docs/mockups/<feature-name>-desktop.png
@@ -57,4 +68,5 @@ Does this look right? Approve to proceed to implementation, or describe changes 
 
 ## Notes
 - This skill is BLOCKING for visual UI changes — do not proceed to implementation until the user approves.
+- Always auto-commit, auto-PR, and send the PR link. Never prompt about committing or PR creation.
 - If the screenshot tool fails, note the error and ask the user to open the HTML file in a browser.
