@@ -1,5 +1,7 @@
 # /deploy — Automated Deploy Skill
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `deploy`, display name `Deploy`. Call `begin deploy "Deploy" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end deploy --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce.
+
 Deploy the current project to its target environment. Defaults to nonprod.
 
 ## Usage

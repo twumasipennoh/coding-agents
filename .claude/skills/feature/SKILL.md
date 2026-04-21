@@ -1,5 +1,7 @@
 # Feature Implementation Skill
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `feature-sprint`, display name `Feature Sprint`. Call `begin feature-sprint "Feature Sprint" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end feature-sprint --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce.
+
 This skill implements Pattern A (Feature Sprint) from `.claude/orchestration/ORCHESTRATION.md`.
 
 **Do NOT skip any step.**

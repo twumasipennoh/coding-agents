@@ -1,5 +1,7 @@
 # Orchestration Patterns
 
+> **Pipeline announcements required.** For any orchestration pattern invoked below (Feature Sprint, Bug Hunt, Refactoring Session, Research Spike, Security Hardening), announce each non-interactive agent/step via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use the pattern name as display name (e.g. `Feature Sprint`) and one of these pipeline-ids: `feature-sprint`, `bug-hunt`, `refactor`, `research-spike`, `security-hardening`. Call `begin <id> "<Display>" --total <N>` at the start, `start <id> "<Agent Name>" --index N` before each agent, `done`/`fail`/`skip` after, and `end <id> --status ok|fail` when the pattern completes. Interactive agents (requirements-clarifier) are exempt.
+
 Predefined workflows for common development tasks. Each pattern maps this workflow's agents and skills to a specific type of work.
 
 The Feature Sprint (Pattern A) is the default pipeline defined in CLAUDE.md. Patterns B-E cover tasks that don't fit the linear feature pipeline.

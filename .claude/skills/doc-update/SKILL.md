@@ -1,5 +1,7 @@
 # /doc-update - Sync Documentation for a Feature
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `doc-update`, display name `Doc Update`. Call `begin doc-update "Doc Update" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end doc-update --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce.
+
 Run the **doc-updater** agent for a named feature (or the current in-progress feature if none given). Executes all 7 documentation phases.
 
 ## Usage
