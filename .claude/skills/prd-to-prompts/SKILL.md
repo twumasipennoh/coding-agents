@@ -1,5 +1,7 @@
 # /prd-to-prompts - Generate Feature Prompts from PRD
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `prd-to-prompts`, display name `PRD to Prompts`. Call `begin prd-to-prompts "PRD to Prompts" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end prd-to-prompts --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce.
+
 Delegates to the **prompt-builder** agent. This skill is a shortcut — all prompt generation logic lives in `.claude/agents/prompt-builder.md`.
 
 ## What to Do

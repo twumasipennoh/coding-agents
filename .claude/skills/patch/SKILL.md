@@ -1,5 +1,7 @@
 # /patch — Quick Fix or Design Tweak with Gates
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `patch`, display name `Patch`. Call `begin patch "Patch" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end patch --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce.
+
 Lightweight flow for small fixes and design tweaks. Runs the right quality gates without the full feature pipeline.
 
 ## Usage
