@@ -19,6 +19,7 @@ When deploying, always verify: 1) correct deploy target/alias, 2) environment va
 
 ## Workflow / Feature Pipeline
 - Follow the project's feature implementation pipeline using the agents defined in `.claude/agents/`. The pipeline order is: **requirements-clarifier** -> **monitoring-spec-validator** (early pass) -> **mockup-designer** (UI/UX visual gate) -> **pre-flight** -> **test-creator** -> **feature-creator** -> **monitoring-implementer** -> **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** (late pass) + **frontend-design-reviewer** (parallel) -> **test-runner** -> **doc-updater** -> user gate -> commit. Each agent's full specification lives in its `.md` file -- read it before invoking. Do NOT skip pipeline steps even if they seem unnecessary.
+- Pipeline steps auto-announce via `~/.claude/scripts/pipeline-step.sh`. Every non-interactive step of this pipeline (and any other multi-step skill — `/deploy`, `/fix`, `/checkpoint`, `/pr`, `/patch`, `/gate-check`, `/doc-update`, `/prd-to-prompts`, `/standup`) emits a start/finish message via the helper. Canonical rule in global `~/.claude/CLAUDE.md § "Pipeline step announcements"`; per-step events appended to an audit log at `~/.claude/state/pipelines/` that `/pipeline-status` and `/gate-check` read to verify pairing.
 - Before implementing a feature, verify the actual state of the codebase. Do not assume docs are accurate -- check the code. If user references task numbers that don't exist, clarify before proceeding.
 
 ## Code Style / Guidelines
