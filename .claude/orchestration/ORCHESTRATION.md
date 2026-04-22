@@ -22,19 +22,21 @@ Next step: [agent name] -- [what it should focus on]
 
 ## Pattern A: Feature Sprint
 
-The existing 8-step feature implementation pipeline.
+The 9-step feature implementation pipeline.
 
 **Agents (in order):**
 1. requirements-clarifier -- scope and plan
-2. pre-flight -- validate project health
-3. test-creator -- write failing tests
-4. feature-creator -- implement to pass tests
-5. pattern-enforcer + security-reviewer + frontend-design-reviewer (conditional) -- parallel review
-6. test-runner -- full suite
-7. doc-updater -- sync all docs
-8. User gate -- confirm, then commit
+2. monitoring-spec-validator (early pass) -- validate monitoring spec quality
+3. pre-flight -- validate project health
+4. test-creator -- write failing tests
+5. feature-creator -- implement to pass tests
+6. monitoring-implementer -- produce/update monitoring infrastructure from spec
+7. pattern-enforcer + security-reviewer + monitoring-spec-validator (late pass) + frontend-design-reviewer (conditional) -- parallel review
+8. test-runner -- full suite
+9. doc-updater -- sync all docs
+10. User gate -- confirm, then commit
 
-**Gates:** ALL 6 non-negotiable gates apply (fix-advocate for bugs, test-runner, pattern-enforcer, security-reviewer, frontend-design-reviewer conditional, doc-updater)
+**Gates:** ALL 7 non-negotiable gates apply (fix-advocate for bugs, test-runner, pattern-enforcer, security-reviewer, monitoring-spec-validator, monitoring-implementer, frontend-design-reviewer conditional, doc-updater)
 
 **Trigger:** `/feature` or "implement feature N"
 

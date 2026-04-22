@@ -18,7 +18,7 @@ Example of the wrong style:
 When deploying, always verify: 1) correct deploy target/alias, 2) environment variables point to correct project, 3) all tests pass. Never deploy to production unless explicitly asked.
 
 ## Workflow / Feature Pipeline
-- Follow the project's feature implementation pipeline using the agents defined in `.claude/agents/`. The pipeline order is: **requirements-clarifier** -> **monitoring-spec-validator** -> **mockup-designer** (UI/UX visual gate) -> **pre-flight** -> **test-creator** -> **feature-creator** -> **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** + **frontend-design-reviewer** (parallel) -> **test-runner** -> **doc-updater** -> user gate -> commit. Each agent's full specification lives in its `.md` file -- read it before invoking. Do NOT skip pipeline steps even if they seem unnecessary.
+- Follow the project's feature implementation pipeline using the agents defined in `.claude/agents/`. The pipeline order is: **requirements-clarifier** -> **monitoring-spec-validator** (early pass) -> **mockup-designer** (UI/UX visual gate) -> **pre-flight** -> **test-creator** -> **feature-creator** -> **monitoring-implementer** -> **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** (late pass) + **frontend-design-reviewer** (parallel) -> **test-runner** -> **doc-updater** -> user gate -> commit. Each agent's full specification lives in its `.md` file -- read it before invoking. Do NOT skip pipeline steps even if they seem unnecessary.
 - Pipeline steps auto-announce via `~/.claude/scripts/pipeline-step.sh`. Every non-interactive step of this pipeline (and any other multi-step skill — `/deploy`, `/fix`, `/checkpoint`, `/pr`, `/patch`, `/gate-check`, `/doc-update`, `/prd-to-prompts`, `/standup`) emits a start/finish message via the helper. Canonical rule in global `~/.claude/CLAUDE.md § "Pipeline step announcements"`; per-step events appended to an audit log at `~/.claude/state/pipelines/` that `/pipeline-status` and `/gate-check` read to verify pairing.
 - Before implementing a feature, verify the actual state of the codebase. Do not assume docs are accurate -- check the code. If user references task numbers that don't exist, clarify before proceeding.
 
@@ -166,6 +166,14 @@ These patterns are mandatory for all new frontend work across all projects. Adap
 - Never cache authenticated API responses
 - Offline fallback page
 
+## Monitoring Conventions
+
+- **Monitoring spec**: Each feature that introduces new user-facing or system-critical functionality should have monitoring coverage defined in `monitoring_spec.md`.
+- **Implementation agent**: The `monitoring-implementer` agent reads the spec and produces scripts in `scripts/monitoring/`. It runs after `feature-creator` and before the parallel review gates.
+- **Validation**: `monitoring-spec-validator` runs twice — early pass (spec quality) and late pass (implementation matches spec).
+- **Deploy hook**: Monitoring setup is wired into the deploy process. The deploy script invokes monitoring infrastructure provisioning.
+- **Notification email**: `twumasi.pennoh@gmail.com` is the default alert recipient.
+
 ## AUTOMATION RULES
 
 ### Requirements Clarification (Before Any Feature or Bug Fix)
@@ -186,9 +194,10 @@ When implementing a feature, execute this pipeline in order:
 1. **pre-flight** -> Validates project health before starting: test suite green, docs fresh, agent configs consistent, next task dependencies met. BLOCKING if tests fail.
 2. **test-creator** -> Reads the task spec from FEATURE_PROMPTS.md, writes failing tests based on "Tests to Write First"
 3. **feature-creator** -> Implements code to make the failing tests pass, follows "Implementation Steps"
-4. **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** + **frontend-design-reviewer** -> Run in PARALLEL (all read-only). pattern-enforcer and security-reviewer ALWAYS run. frontend-design-reviewer only runs if changes touch frontend files. Fix any findings before proceeding.
-5. **test-runner** -> Runs the full test suite across all layers. Must be all green.
-6. **doc-updater** -> Performs all 7 doc-sync phases:
+4. **monitoring-implementer** -> Reads monitoring_spec.md and produces/updates monitoring infrastructure scripts and deploy hook wiring. Runs after feature code is written.
+5. **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** (late pass) + **frontend-design-reviewer** -> Run in PARALLEL (all read-only). pattern-enforcer and security-reviewer ALWAYS run. monitoring-spec-validator verifies implementation matches spec. frontend-design-reviewer only runs if changes touch frontend files. Fix any findings before proceeding.
+6. **test-runner** -> Runs the full test suite across all layers. Must be all green.
+7. **doc-updater** -> Performs all 7 doc-sync phases:
    - Phase 1: Writes TESTING_<FEATURE_NAME>.md in docs/prompts/
    - Phase 2: Updates FEATURE_PROMPTS.md (checkboxes + completion notes)
    - Phase 3: Appends to docs/DECISIONS.md (if new architectural/security decisions)
@@ -196,8 +205,8 @@ When implementing a feature, execute this pipeline in order:
    - Phase 5: Updates PRD to reflect what was actually built
    - Phase 6: Updates README.md (new routes, endpoints, features, docs references)
    - Phase 7: Flags items needing human attention (CLAUDE.md, agent configs, global MEMORY.md)
-7. **User gate** -> Present doc-updater summary and GATES completion log. User confirms go/no-go.
-8. **Commit** -> After user confirms, stage and commit all changes with a descriptive commit message.
+8. **User gate** -> Present doc-updater summary and GATES completion log. User confirms go/no-go.
+9. **Commit** -> After user confirms, stage and commit all changes with a descriptive commit message.
 
 ### Agent Inventory
 | Agent | Role | Writes Code? |
@@ -214,6 +223,7 @@ When implementing a feature, execute this pipeline in order:
 | frontend-design-reviewer | Checks design quality, a11y, responsive, UX | No (report only) |
 | test-runner | Runs test suites, reports results | No (report only) |
 | monitoring-spec-validator | Enforces monitoring specification creation and validation | No (report only) |
+| monitoring-implementer | Produces monitoring infrastructure from monitoring_spec.md | Yes (scripts only) |
 | test-flow-writer | Writes TESTING_<FEATURE_NAME>.md after feature completion | No (docs only) |
 | doc-updater | Doc sync: TESTING, FEATURE_PROMPTS, DECISIONS, agent memory, PRD, README | No (docs only) |
 
