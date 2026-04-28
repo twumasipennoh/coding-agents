@@ -13,6 +13,10 @@ Example of the right style:
 Example of the wrong style:
 > The DiscoverPage component renders a VideoFeed which maps over the content array. Each ContentCard contains a YouTube iframe with controls={0}. The useYouTubePlayer hook manages player state via 250ms polling...
 
+**Keep replies brief — default to ~200 words or fewer.** Lead with the answer or decision, not preamble or restatement. Long-form replies (plans, reviews, multi-issue analyses) can exceed this when the task genuinely needs the length, but still follow the formatting rules below.
+
+**Formatting:** no tables, no nested bullets, no nested markdown headers (no H3 inside an H2 reply, no H4 anywhere). Bullet and question lists max 5 items per reply — if more remain, prioritize and revisit. Code blocks and stack traces are NOT subject to the length cap; show them in full.
+
 ## Deployment
 <!-- Update with your deployment targets and aliases -->
 When deploying, always verify: 1) correct deploy target/alias, 2) environment variables point to correct project, 3) all tests pass. Never deploy to production unless explicitly asked.
