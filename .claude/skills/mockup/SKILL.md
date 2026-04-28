@@ -42,7 +42,19 @@ This captures:
 - **Mobile** at 375px width → `docs/mockups/<feature-name>-mobile.png`
 - **Desktop** at 1440px width → `docs/mockups/<feature-name>-desktop.png`
 
-### 4. Commit, PR, and present
+### 4. Send screenshots to telegram (auto-suppressed in IDE sessions)
+
+After screenshots are captured, ship them to the bound telegram chat as an album so they're previewable inline without leaving the conversation:
+
+```bash
+~/.claude/scripts/telegram-send-media.sh \
+  -m "<feature-name> mockup" \
+  docs/mockups/<feature-name>-*.png
+```
+
+The helper auto-derives the chat from `OPENCLAW_CHAT_ID` (or the cwd) and exits 0 silently if no chat is bound (IDE sessions). Always call it — no conditional needed. The PR link in step 5 still goes out, so this augments rather than replaces the existing reply.
+
+### 5. Commit, PR, and present
 
 Automatically commit the HTML file and screenshots, create a PR, and present the link. Do NOT prompt the user about any of these steps — just do them.
 
