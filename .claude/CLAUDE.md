@@ -38,6 +38,17 @@ When making UI/CSS fixes, change ONLY what was requested. Do not refactor surrou
 4. **Demand Elegance** -- For non-trivial changes, pause and ask "is there a more elegant way?" Challenge your own work before presenting it. Skip for simple/mechanical fixes.
 5. **Autonomous Bug Fixing** -- When given a bug report, investigate and fix it. Point at logs, errors, and failing tests -- then resolve them. Don't ask for hand-holding.
 
+## CONFIG-AS-CODE DRIFT — DEPLOY-TIME DIFF RULE
+
+When a file in the repo is meant to mirror runtime state (Firestore indexes, GCP IAM bindings, alert policies, DNS records, k8s configmaps, npm package versions vs. lockfile, etc.), treat the file as source of truth — but verify with a diff before each deploy. Two failure modes:
+
+1. **Silent deletion.** A deploy that uses `--force` (or otherwise reconciles to the file) can delete server-side state that someone added directly via console or another tool. If the file doesn't list it, the deploy removes it.
+2. **Silent degradation.** State in the file that never made it to one environment means features in that environment run degraded — full-collection scans instead of indexed lookups, missing alerts, expired auth, etc. — without anyone noticing because tests on the other environment pass.
+
+**Rule:** when a deploy step can silently delete or fail to create runtime state, add a hard-blocking pre-deploy diff that exits non-zero on drift. The diff fetches what's actually deployed, normalizes, compares against the source-of-truth file, and refuses to ship until reconciled.
+
+**Caught in practice (2026-04-30):** one wrong-ordered Firestore index failing silently in production for months on Insem; two indexes missing from MediaTracker prod (music digest + polling running degraded); five indexes missing from HabitTracker prod (items-by-category + reminders running degraded). All eight latent issues surfaced by the audit step of installing this kind of gate. None were on any bug list.
+
 ## SELF-IMPROVEMENT
 After ANY correction from the user, record the pattern in `docs/lessons.md` (create if it doesn't exist). Review `docs/lessons.md` at the start of each session. Format:
 ```
