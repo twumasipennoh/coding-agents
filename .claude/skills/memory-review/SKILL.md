@@ -12,7 +12,7 @@ Delegate to the **memory-curator** agent (`.claude/agents/memory-curator.md`).
 
 ## Arguments
 
-- `/memory-review` — Full review (default): capacity, promotion candidates, stale entries, consolidation, conflicts, recommendations
+- `/memory-review` — Full review (default): capacity, promotion candidates, stale entries, consolidation, conflicts, project docs health, recommendations
 - `/memory-review --quick` — Summary only: line counts, health status, top 3 candidates
 - `/memory-review --stale` — Focus on stale/outdated entries only
 - `/memory-review --candidates` — Show only promotion candidates (scored entries)
@@ -25,3 +25,5 @@ Delegate to the **memory-curator** agent (`.claude/agents/memory-curator.md`).
 - Before starting a new project phase or sprint
 - After a refactor that may have made memory entries stale
 - Periodically, to prevent memory rot
+- When CLAUDE.md feels bloated or outdated
+- After merging many architectural decisions
