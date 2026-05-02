@@ -1,8 +1,8 @@
 # /deploy — Automated Deploy Skill
 
-> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `deploy`, display name `Deploy`. Call `begin deploy "Deploy" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end deploy --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
-
 Deploy the current project to its target environment. Defaults to nonprod.
+
+> **Pipeline announcements required.** This skill is a multi-step pipeline. Announce every non-interactive step via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `deploy`, display name `Deploy`, step labels as shown in the section headings below (e.g. `Pre-Deploy Checks`, `Deploy`, `Log`, `Notify`). Wrap the run with `begin deploy "Deploy" --total 4` at Step 3 kickoff (Steps 0–1 are parse/detect, near-instant) and `end deploy --status ok|fail` after Step 6. Replace all hand-written `telegram-ping.sh` calls below with the corresponding helper subcommand.
 
 ## Usage
 
@@ -54,7 +54,10 @@ Read the resolved alias and project ID for use in subsequent steps.
 
 ### Step 3 — Pre-deploy checks
 
-Run these in order. If any fail, stop and ping telegram with the failure.
+**Announce start:** `~/.claude/scripts/pipeline-step.sh begin deploy "Deploy" --total 4` (covers Steps 3, 4, 5, 6).
+**Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Pre-Deploy Checks" --index 1`
+
+Run these in order. If any fail, call `pipeline-step.sh fail deploy "Pre-Deploy Checks" "<reason>"`, then `pipeline-step.sh end deploy --status fail`, and stop.
 
 1. **Firebase CLI check:** Run `npx firebase-tools@latest --version` to verify firebase tools are available.
 2. **Auth check:** Run `npx firebase-tools@latest projects:list --json 2>/dev/null | head -5` to verify authentication. If this fails, report the auth issue and stop.
@@ -62,14 +65,22 @@ Run these in order. If any fail, stop and ping telegram with the failure.
 4. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially (use the target-specific build commands — `nonprod` or `prod`). If build fails, stop.
 5. **Env file verification (Firebase):** If `deploy.json.envFiles` is set for this target, verify those files exist and spot-check that they reference the correct project ID (grep for the project ID in the env file).
 
+On success: `pipeline-step.sh done deploy "Pre-Deploy Checks" --note "tests + build + env verified"`.
+
 ### Step 4 — Deploy
 
-1. **Ping telegram:** `~/.claude/scripts/telegram-ping.sh "🚀 Deploying <project-name> to <environment-alias> (<nonprod|prod>)"`
-2. **Switch alias (Firebase):** `npx firebase-tools@latest use <alias>`
-3. **Deploy:** `npx firebase-tools@latest deploy --project <alias>` — this deploys all configured services. If the project uses hosting targets (see `deploy.json.hostingTarget`), use `--only hosting:<target>,functions,firestore` as appropriate.
-4. **Post-deploy script (if configured):** Run `deploy.json.postDeploy[<target>]` commands (e.g., monitoring setup).
+**Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Deploy" --index 2 --note "<alias> (<nonprod|prod>)"`
+
+1. **Switch alias (Firebase):** `npx firebase-tools@latest use <alias>`
+2. **Deploy:** `npx firebase-tools@latest deploy --project <alias>` — this deploys all configured services. If the project uses hosting targets (see `deploy.json.hostingTarget`), use `--only hosting:<target>,functions,firestore` as appropriate.
+3. **Post-deploy script (if configured):** Run `deploy.json.postDeploy[<target>]` commands (e.g., monitoring setup).
+
+On success: `pipeline-step.sh done deploy "Deploy" --note "services deployed"`.
+On failure: `pipeline-step.sh fail deploy "Deploy" "<reason>"`, then `end deploy --status fail`.
 
 ### Step 5 — Log
+
+**Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Log" --index 3`
 
 Append a row to `DEPLOYMENTS.md` in the project root. Create the file if it doesn't exist. Format:
 
@@ -93,10 +104,16 @@ If the file doesn't have a table header yet, prepend:
 |------|-----|--------|--------|----------|--------|
 ```
 
+On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, <branch>"`.
+
 ### Step 6 — Notify
 
-- **On success:** `~/.claude/scripts/telegram-ping.sh "✅ Deploy complete — <project-name> to <alias> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>"`
-- **On failure:** `~/.claude/scripts/telegram-ping.sh "❌ Deploy failed — <project-name> to <alias>. Reason: <failure-reason>"`
+**Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Notify" --index 4`
+
+Do nothing specific in this step beyond the helper call — the pipeline-step helper already sends a telegram message. Use the `--note` field on `end` to carry the extra context (`<project-name> to <alias>`, commit hash, branch).
+
+- **On success:** `pipeline-step.sh done deploy "Notify"`, then `pipeline-step.sh end deploy --status ok --note "<project-name> to <alias> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>"`.
+- **On failure:** `pipeline-step.sh fail deploy "Notify" "<failure-reason>"`, then `pipeline-step.sh end deploy --status fail --note "<project-name> to <alias>. <failure-reason>"`.
 
 ## deploy.json Schema
 

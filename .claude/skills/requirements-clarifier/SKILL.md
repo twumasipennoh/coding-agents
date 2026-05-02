@@ -2,6 +2,10 @@
 
 Run the **requirements-clarifier** agent before any feature or bug fix. Walks through 5 engineering method phases with the user.
 
+## Per-project context
+
+Before each phase, read `<project_root>/.claude/clarifier-context.md` if it exists. This sidecar lists the project's stack (backend/frontend frameworks, test frameworks, design system) and any clarifier-specific guidance. Weave its notes into your phase prompts where relevant — e.g., "consider testability across the project's pytest + Vitest + Playwright stack" or "evaluate impact on the Tailwind v4 design tokens." If the file is missing, proceed with universal phrasing — no error, no block.
+
 ## Usage
 
 ```
@@ -61,7 +65,7 @@ Pressure-test the chosen approach:
 **GATE: Pause after this phase and wait for user confirmation before proceeding.**
 
 ### Phase 4 — Plan
-Explain what the change means in plain language — not file-level details, but what the system will do differently. Describe the implementation sequence without going into code. If mockups were approved, reference them as the visual spec.
+Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If mockups were approved, reference them as the visual spec.
 
 **GATE: Pause after this phase and wait for user sign-off before proceeding.**
 
