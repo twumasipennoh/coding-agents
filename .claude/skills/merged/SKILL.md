@@ -9,33 +9,50 @@ After a PR merges, align local branches with remote and clean up merged feature 
 - **`/merged`** (no args) — auto-detect scope. Use the cwd's current branch as the trigger. If sibling repos under `~/projects/*/` also have a branch with the same name, treat as a multi-project batch. Otherwise just the cwd repo.
 - **`/merged --here`** — only the cwd repo, ignore siblings.
 - **`/merged --batch <branch>`** — process every project under `~/projects/*/` that has a branch named `<branch>`. Useful when you didn't cd into one of them or when the cwd is unrelated.
+- **`/merged --all-merged`** — sweep mode. Walk every project under `~/projects/*/`, find every local branch with a merged PR, classify per the decision table, and process them in one plan-and-confirm pass. Combine with `--here` to scope to cwd only. Mutually exclusive with `--batch`. Use after a long stretch of work that accumulated stale branches.
 - **`/merged <free text>`** — auto-detect mode plus capture trailing text as an annotation. Echo the annotation in the final report; pass it as `--note` to `pipeline-step.sh end`. Free text never affects branch detection or actions.
 
-Combinations are allowed: `/merged --here cleaning up after F32` means single-repo with annotation. Treat any flag-leading token (`--here`, `--batch`) before parsing as positional; everything else after the flags is annotation.
+Combinations are allowed: `/merged --here cleaning up after F32` means single-repo with annotation. `/merged --all-merged sweep before vacation` works too. Treat any flag-leading token (`--here`, `--batch`, `--all-merged`) before parsing as positional; everything else after the flags is annotation. **Error and stop** if both `--batch` and `--all-merged` are passed.
 
-## Multi-Project Detection (always runs)
+## Candidate Detection
 
-Before mutating anything:
+Different modes scan differently. Use the right one based on which flags were passed:
+
+### Default / `--batch` / `--here` modes
 
 1. Determine the trigger branch:
    - If `--batch <branch>` provided, that's the trigger.
    - Else `git branch --show-current` from cwd.
-2. **STOP** if the trigger is the base branch itself (`main` / `master`). Tell the user: "You're on the base branch. Pass `--batch <branch>` or run from the merged feature branch."
+2. **STOP** if the trigger is the base branch itself (`main` / `master`). Tell the user: "You're on the base branch. Pass `--batch <branch>`, `--all-merged`, or run from a merged feature branch."
 3. List candidate projects:
    - If `--here` set → only the cwd repo.
    - Else walk every dir under `~/projects/*/` containing a `.git` directory. Include the cwd repo regardless of whether it matches.
 4. For each candidate, check whether a branch matching the trigger exists locally OR was recently active on the remote (`git ls-remote --heads <remote> <trigger>`).
 5. Drop candidates with no matching branch unless they're the cwd repo (always include cwd).
 
+### `--all-merged` sweep mode
+
+Different shape: instead of using cwd's branch as the trigger, find every local branch with a merged PR across all eligible projects.
+
+1. List candidate projects:
+   - If `--here` set → only the cwd repo.
+   - Else walk every dir under `~/projects/*/` containing a `.git` directory.
+2. For each project:
+   a. List every local branch except `main`/`master`: `git for-each-ref --format='%(refname:short)' refs/heads/`.
+   b. For each branch, query `gh pr list --head <branch> --state merged --limit 1 --json number,mergedAt --jq '.[0]'`. If `.mergedAt` is non-null, the branch is a candidate.
+   c. Branches with no merged PR (open, closed-unmerged, or no PR at all) are reported as "left alone" but not processed.
+3. If `gh` is unauthenticated, fall back to `git branch --merged <base>` per project (catches merge-commit and rebase-merge but not squash). Warn the user.
+4. The `--all-merged` mode **always prompts** before mutating, regardless of cleanliness — the blast radius is too wide for auto-confirm.
+
 ## Per-Project Decision Table
 
-For each candidate repo, classify before mutating:
+For each candidate branch, classify before mutating:
 
-| Repo state | Action |
+| Branch state | Action |
 |---|---|
-| PR for `<trigger>` is merged AND local branch tip exactly matches what shipped AND working tree clean | switch to base, fast-forward, delete local `<trigger>`, prune stale remote-tracking refs |
-| PR for `<trigger>` is merged AND local branch has commits beyond what shipped | switch to base, fast-forward, **keep `<trigger>`**; report "kept — N unmerged commits beyond what shipped" |
-| PR for `<trigger>` is closed unmerged | switch to base, fast-forward, **keep `<trigger>`**; report "PR #X closed without merging — branch kept" |
+| PR is merged AND local branch tip exactly matches what shipped AND working tree clean | switch to base, fast-forward, delete local branch, prune stale remote-tracking refs |
+| PR is merged AND local branch has commits beyond what shipped | switch to base, fast-forward, **keep branch**; report "kept — N unmerged commits beyond what shipped" |
+| PR is closed unmerged | switch to base, fast-forward, **keep branch**; report "PR #X closed without merging — branch kept" |
 | Working tree dirty in this repo | refuse to mutate this repo; list dirty files; ask whether to **stash / commit / abort this repo only** (continue with siblings either way) |
 | User on base branch (`main` / `master`) already in this repo | just `git fetch --prune` + `git pull --ff-only`; report new commits if any; no branch switching |
 | Local base has accidental merge commits not on `<remote>/<base>` | flag and **prompt before** suggesting `git reset --hard <remote>/<base>`. Never auto-fix. |
@@ -44,20 +61,21 @@ For each candidate repo, classify before mutating:
 To check if a PR was merged via squash/rebase/merge-commit uniformly:
 
 ```
-gh pr list --head <trigger> --state merged --limit 1 --json number,mergedAt,mergeCommit --jq '.[0]'
+gh pr list --head <branch> --state merged --limit 1 --json number,mergedAt,mergeCommit --jq '.[0]'
 ```
 
 If `.mergedAt` is non-null, the PR was merged regardless of strategy.
 
 ## Plan-and-Confirm
 
-After the scan and classification:
+After detection and classification:
 
-1. Print a compact per-repo plan, one block per repo.
-2. **Auto-confirm and proceed without prompting** when every repo's classification is "merged + clean tip + clean tree" (the most common case).
-3. **Prompt the user with `y/N`** if any repo is in an ambiguous state — dirty tree, unmerged commits, declined PR, accidental merge commits, or `gh` fallback warnings. Show the plan, ask explicitly, wait.
+1. Print a compact plan. In default / `--batch` / `--here` modes: one block per repo. In `--all-merged` sweep mode: group by project with counts (`<project>: N to delete, M to keep, K left alone`).
+2. **Auto-confirm and proceed without prompting** in default / `--batch` / `--here` modes when every repo's classification is "merged + clean tip + clean tree" (the most common case).
+3. **Prompt the user with `y/N`** in default / `--batch` / `--here` modes if any repo is in an ambiguous state — dirty tree, unmerged commits, declined PR, accidental merge commits, or `gh` fallback warnings.
+4. **Always prompt** in `--all-merged` sweep mode regardless of cleanliness.
 
-Plan output format:
+Plan output format (default / `--batch`):
 
 ```
 Insem_SocialMediaAggregator (cwd):
@@ -70,13 +88,26 @@ MediaTracker (sibling):
   branch: chore/foo
   No matching PR found
   → skip
+```
 
-HabitTracker (sibling): no matching branch — skipping
+Plan output format (`--all-merged`):
+
+```
+Sweep mode — scanning 7 projects for branches with merged PRs.
+
+Insem_SocialMediaAggregator: 9 to delete, 0 to keep, 0 left alone
+  delete: chore/automated-deploy-skill, chore/claude-md-reply-style, ...
+HabitTracker: 9 to delete, 0 to keep, 1 closed-unmerged kept
+  keep: chore/promote-monitoring-rules-to-claude-md (PR #54 closed without merging)
+...
+
+Total: 56 branches to delete across 7 projects.
+Proceed? [y/N]
 ```
 
 ## Execute (per repo, sequential)
 
-For each repo classified as actionable (in declared order):
+For each repo with at least one actionable branch:
 
 1. Capture original branch (`git branch --show-current`) and dirty state (`git status --porcelain`).
 2. Detect remote: prefer `origin`, fall back to `upstream`, else first listed remote. **STOP this repo with note** if no remote.
@@ -85,15 +116,15 @@ For each repo classified as actionable (in declared order):
 5. `git fetch <remote> --prune` (drops stale remote-tracking refs as a side effect).
 6. `git checkout <base>`.
 7. `git pull --ff-only <remote> <base>`. If this fails (divergent), abort this repo cleanly: switch back to original branch, pop stash, log the failure, continue siblings.
-8. If the trigger branch should be deleted: `git branch -d <trigger>` (regular delete — refuses if there are unmerged commits, which is the safety net we want).
-9. Switch back to the original branch (unless original was the trigger and we just deleted it — in that case stay on base).
+8. **For each branch to delete in this repo** (one in default mode, possibly many in sweep mode): `git branch -d <branch>` (regular delete — refuses if there are unmerged commits, which is the safety net we want). If `-d` refuses, fall through to "kept — has unmerged commits" classification and continue.
+9. Switch back to the original branch (unless original was deleted — in that case stay on base).
 10. Pop stash if one was created. **If pop has conflicts, do NOT drop the stash**; note "stash exists in <repo> — run `git stash pop` manually."
 
 If any step fails for a repo: capture reason, attempt to restore (checkout original, pop stash), continue to next repo. Do not abort the entire run.
 
 ## Stale Local Branches Report
 
-After the per-repo work, additionally check each touched repo for branches that look abandoned: local branches not associated with an open or recently-merged PR, with no commits in the last 30 days. List them as informational hints — do **not** delete them.
+In default / `--batch` / `--here` modes, after the per-repo work, additionally check each touched repo for branches that look abandoned: local branches not associated with an open or recently-merged PR, with no commits in the last 30 days. List them as informational hints — do **not** delete them. Suggest `/merged --all-merged` if many surface.
 
 ```bash
 git for-each-ref --format='%(refname:short) %(committerdate:relative)' refs/heads/ | \
@@ -102,19 +133,21 @@ git for-each-ref --format='%(refname:short) %(committerdate:relative)' refs/head
 
 For each, confirm via `gh pr list --head <branch>`. If no PR (open or merged) is associated, list as stale.
 
+In `--all-merged` mode, this section is redundant — the sweep already touched every branch with a merged PR. Just list "no merged PR" branches in the final report under "left alone."
+
 ## Final Report
 
 Single output block, one line per project plus a footer:
 
 ```
-Insem_SocialMediaAggregator: aligned with origin/main, deleted chore/foo
-MediaTracker: skipped — branch present but no merged PR
-HabitTracker: clean, on main, no action needed
+Insem_SocialMediaAggregator: aligned with origin/main, deleted 9 branches (chore/foo, chore/bar, ...)
+MediaTracker: clean, on master, no action needed
+HabitTracker: deleted 9 branches; kept 1 (chore/promote-monitoring-rules-to-claude-md — PR #54 closed)
 ai_personal_assistant: kept docs/something — 2 unmerged commits beyond what shipped
 
 Notes:
   - <free-text annotation from invocation, if any>
-  - HabitTracker: 3 stale local branches (no recent PR). Review manually.
+  - HabitTracker: 3 stale local branches (no recent PR). Run `/merged --all-merged` to clean.
   - MediaTracker: stash from skill remains — run `git stash pop` manually.
 ```
 
