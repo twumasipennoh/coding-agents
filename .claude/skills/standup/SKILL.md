@@ -25,7 +25,12 @@ Scan for blockers across:
 - **Unresolved items** — scan CLAUDE.md for any flagged TO-DOs
 - **Open Phase 7 flags** from doc-updater in FEATURE_PROMPTS.md or DECISIONS.md
 
-### 4. Format output
+### 4. Check secret rotation due dates
+Run: `~/.claude/scripts/rotate-secret.sh status --due-only`
+
+If output contains `✗` (overdue) or `⚠` (due within 14 days) lines, capture them for the "Secrets due" section in step 5. If output is `No secrets due in the next 14 days.` — omit the Secrets section entirely. The full system is documented in `~/.claude/CLAUDE.md § "Secret rotation"`.
+
+### 5. Format output
 
 ```
 Standup — <date>
@@ -43,9 +48,13 @@ Today:
 Blockers:
   - <blocker 1> (tests failing / missing dep / open flag)
   - None
+
+Secrets due:
+  - <line from rotate-secret status --due-only>
+  - (omit this section entirely if nothing is due)
 ```
 
 ## Notes
-- Keep this brief — 10 lines or fewer total.
+- Keep this brief — 10 lines or fewer total (the Secrets due section is silent on quiet days).
 - If git log shows no commits, note that.
 - If FEATURE_PROMPTS.md doesn't exist, say so under Today.
