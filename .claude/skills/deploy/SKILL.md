@@ -12,6 +12,15 @@ Deploy the current project to its target environment. Defaults to nonprod.
 /deploy prod      → deploy to production
 ```
 
+## Deploy kinds
+
+The skill reads `.claude/deploy.json` for project-specific config. The top-level `kind` field selects the deploy flavor:
+
+- **`firebase`** (default when `kind` is missing — back-compat with every existing `deploy.json`) — runs the Firebase CLI flow (tests → build → `firebase deploy`).
+- **`local-script`** — runs the project's own shell commands locally (no Firebase, no cloud). Use this for projects whose "deploy" is a local rebuild + daemon restart, a docker restart, or any other shell-driven flow.
+
+Other kinds (`docker`, `vercel`, etc.) are reserved for future additions. Adding a new kind = add a branch under each step that needs it + a schema example at the bottom.
+
 ## Invocation
 
 When `/deploy` is called, execute the full pipeline below. Do NOT prompt for confirmation — if checks pass, deploy proceeds.
@@ -27,20 +36,30 @@ When `/deploy` is called, execute the full pipeline below. Do NOT prompt for con
 
 1. Determine the current project from the working directory.
 2. Look for `.claude/deploy.json` in the project root.
-3. **If `deploy.json` exists:** load it, then validate (Step 1b).
+3. **If `deploy.json` exists:** load it. Read top-level `kind` field — default to `"firebase"` if absent (back-compat). Then validate (Step 1b).
 4. **If `deploy.json` does not exist:** check for deployment config files (`.firebaserc`, `firebase.json`, `Dockerfile`, `vercel.json`, etc.).
-   - If deployment config found → auto-generate `deploy.json` (see schema below), save it, and continue.
-   - If no deployment config found → exit with: "No deployment target configured for this project."
+   - If `.firebaserc` / `firebase.json` found → auto-generate `deploy.json` with `kind: "firebase"` (see Firebase schema below), save it, continue.
+   - Otherwise → exit with: "No deployment target configured for this project. To enable deploys, add `.claude/deploy.json` (set `kind: \"local-script\"` for non-cloud projects) or a `.firebaserc` (Firebase)."
+
+Note: `local-script` projects MUST have a hand-written `deploy.json` — there is no auto-detection, because the commands are project-specific.
 
 ### Step 1b — Validate deploy.json against project files
 
-Compare `deploy.json` against the actual project config files:
+**`kind: "firebase"`:**
 
-- **Firebase projects:** Read `.firebaserc` and `firebase.json`.
-  - Check that aliases in `deploy.json.environments` match `.firebaserc.projects`.
-  - Check that services in `deploy.json.services` match what's configured in `firebase.json` (hosting, functions, firestore, storage).
-  - If drift detected → auto-update `deploy.json`, note what changed in output, continue.
-- **Other platforms (future):** Validate against their respective config files.
+- Read `.firebaserc` and `firebase.json`.
+- Check that aliases in `deploy.json.environments` match `.firebaserc.projects`.
+- Check that services in `deploy.json.services` match what's configured in `firebase.json` (hosting, functions, firestore, storage).
+- If drift detected → auto-update `deploy.json`, note what changed in output, continue.
+
+**`kind: "local-script"`:**
+
+- No external config to validate against. Confirm required fields are present:
+  - `environments` (with at least one entry flagged `nonprod: true`)
+  - `testCommands` (array, may be empty if the project has no test gate)
+  - `buildCommands` (object keyed by environment name)
+  - `deployCommands` (object keyed by environment name, must contain at least one command for the resolved target)
+- If a required field is missing or `deployCommands[<target>]` is empty, exit with a clear error naming the missing field. Do not silently default.
 
 Preserve any user-customized fields (e.g., custom `testCommands`, `buildCommands`, `acknowledgedGaps`).
 
@@ -50,7 +69,8 @@ Using `deploy.json.environments`:
 - If target is `nonprod` → use the environment where `"nonprod": true`.
 - If target is `prod` → use the environment where `"prod": true`.
 
-Read the resolved alias and project ID for use in subsequent steps.
+For `kind: "firebase"`, read the resolved `alias` and `projectId` for subsequent steps.
+For `kind: "local-script"`, the environment key itself (e.g. `"local"`) is the label used in logs + notifications — there's no cloud project ID.
 
 ### Step 3 — Pre-deploy checks
 
@@ -59,23 +79,37 @@ Read the resolved alias and project ID for use in subsequent steps.
 
 Run these in order. If any fail, call `pipeline-step.sh fail deploy "Pre-Deploy Checks" "<reason>"`, then `pipeline-step.sh end deploy --status fail`, and stop.
 
+**`kind: "firebase"`:**
+
 1. **Firebase CLI check:** Run `npx firebase-tools@latest --version` to verify firebase tools are available.
 2. **Auth check:** Run `npx firebase-tools@latest projects:list --json 2>/dev/null | head -5` to verify authentication. If this fails, report the auth issue and stop.
 3. **Run tests:** Execute each command in `deploy.json.testCommands` sequentially. If any test command fails, stop.
-4. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially (use the target-specific build commands — `nonprod` or `prod`). If build fails, stop.
-5. **Env file verification (Firebase):** If `deploy.json.envFiles` is set for this target, verify those files exist and spot-check that they reference the correct project ID (grep for the project ID in the env file).
+4. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
+5. **Env file verification:** If `deploy.json.envFiles` is set for this target, verify those files exist and spot-check that they reference the correct project ID (grep for the project ID in the env file).
 
-On success: `pipeline-step.sh done deploy "Pre-Deploy Checks" --note "tests + build + env verified"`.
+**`kind: "local-script"`:**
+
+1. **Run tests:** Execute each command in `deploy.json.testCommands` sequentially. **BLOCKING** — broken tests = no deploy. (Skip this step ONLY if `testCommands` is an empty array, signalling the project has no test gate by design.)
+2. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
+
+On success: `pipeline-step.sh done deploy "Pre-Deploy Checks" --note "tests + build verified"`.
 
 ### Step 4 — Deploy
 
-**Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Deploy" --index 2 --note "<alias> (<nonprod|prod>)"`
+**Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Deploy" --index 2 --note "<env-label> (<nonprod|prod>)"`
 
-1. **Switch alias (Firebase):** `npx firebase-tools@latest use <alias>`
+**`kind: "firebase"`:**
+
+1. **Switch alias:** `npx firebase-tools@latest use <alias>`
 2. **Deploy:** `npx firebase-tools@latest deploy --project <alias>` — this deploys all configured services. If the project uses hosting targets (see `deploy.json.hostingTarget`), use `--only hosting:<target>,functions,firestore` as appropriate.
 3. **Post-deploy script (if configured):** Run `deploy.json.postDeploy[<target>]` commands (e.g., monitoring setup).
 
-On success: `pipeline-step.sh done deploy "Deploy" --note "services deployed"`.
+**`kind: "local-script"`:**
+
+1. **Run deploy commands:** Execute each entry in `deploy.json.deployCommands[<target>]` sequentially. Any non-zero exit fails the step.
+2. **Post-deploy script (if configured):** Run `deploy.json.postDeploy[<target>]` commands. Typically empty for local-script projects, but available for smoke-checks or notifications.
+
+On success: `pipeline-step.sh done deploy "Deploy" --note "<services-or-label>"`.
 On failure: `pipeline-step.sh fail deploy "Deploy" "<reason>"`, then `end deploy --status fail`.
 
 ### Step 5 — Log
@@ -85,15 +119,15 @@ On failure: `pipeline-step.sh fail deploy "Deploy" "<reason>"`, then `end deploy
 Append a row to `DEPLOYMENTS.md` in the project root. Create the file if it doesn't exist. Format:
 
 ```markdown
-| <date> | <alias> | <commit-short-hash> | <branch> | <services> | <status> |
+| <date> | <env-label> | <commit-short-hash> | <branch> | <deployed> | <status> |
 ```
 
 Where:
 - `<date>` = ISO date (YYYY-MM-DD HH:MM)
-- `<alias>` = Firebase alias used
+- `<env-label>` = Firebase alias for `kind: "firebase"`; environment key (e.g. `"local"`) for `kind: "local-script"`
 - `<commit-short-hash>` = `git rev-parse --short HEAD`
 - `<branch>` = `git branch --show-current`
-- `<services>` = comma-separated list of deployed services
+- `<deployed>` = comma-separated services list for `kind: "firebase"`; for `kind: "local-script"`, the literal label `local-script` optionally suffixed with `:<deploy.json.label>` if the project set one (e.g. `local-script:daemon-restart`)
 - `<status>` = `success` or `failed: <reason>`
 
 If the file doesn't have a table header yet, prepend:
@@ -110,18 +144,19 @@ On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, 
 
 **Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Notify" --index 4`
 
-Do nothing specific in this step beyond the helper call — the pipeline-step helper already sends a telegram message. Use the `--note` field on `end` to carry the extra context (`<project-name> to <alias>`, commit hash, branch).
+Do nothing specific in this step beyond the helper call — the pipeline-step helper already sends a telegram message. Use the `--note` field on `end` to carry the extra context (`<project-name> to <env-label>`, commit hash, branch).
 
-- **On success:** `pipeline-step.sh done deploy "Notify"`, then `pipeline-step.sh end deploy --status ok --note "<project-name> to <alias> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>"`.
-- **On failure:** `pipeline-step.sh fail deploy "Notify" "<failure-reason>"`, then `pipeline-step.sh end deploy --status fail --note "<project-name> to <alias>. <failure-reason>"`.
+- **On success:** `pipeline-step.sh done deploy "Notify"`, then `pipeline-step.sh end deploy --status ok --note "<project-name> to <env-label> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>"`.
+- **On failure:** `pipeline-step.sh fail deploy "Notify" "<failure-reason>"`, then `pipeline-step.sh end deploy --status fail --note "<project-name> to <env-label>. <failure-reason>"`.
 
-## deploy.json Schema
+## deploy.json — `kind: "firebase"` schema
 
 ```jsonc
 {
   // Auto-detected, do not edit
   "platform": "firebase",
   "projectName": "HabitTracker",
+  "kind": "firebase",   // optional — defaults to "firebase" when absent
 
   // Environment map — derived from .firebaserc
   "environments": {
@@ -173,9 +208,9 @@ Do nothing specific in this step beyond the helper call — the pipeline-step he
 }
 ```
 
-### Auto-generation rules
+### Firebase auto-generation rules
 
-When generating `deploy.json` from project files:
+When generating `deploy.json` from project files (Firebase-only — `local-script` projects must be configured by hand):
 
 **Environments:** Read `.firebaserc.projects`. Heuristic for nonprod/prod assignment:
 - Alias names containing `staging`, `dev`, `development`, `test` → `nonprod: true`
@@ -202,18 +237,62 @@ If `firebase.json` exists but is missing commonly expected services (e.g., has h
 
 **Post-deploy:** Check `package.json` for `deploy:staging` / `deploy:prod` scripts and extract any post-firebase-deploy commands. Otherwise empty.
 
+## deploy.json — `kind: "local-script"` schema
+
+```jsonc
+{
+  "project": "conversational-assistant",
+  "kind": "local-script",
+
+  // Optional one-word descriptor that appears in the DEPLOYMENTS.md log
+  // row as `local-script:<label>` — makes the deploy intent recognizable
+  // at a glance (e.g. `daemon-restart`, `docker-rebuild`, `pm2-reload`).
+  "label": "daemon-restart",
+
+  // Environment map. For local-script, the env key is just a label —
+  // no alias/projectId required (Firebase-shaped fields are ignored if
+  // present). Same nonprod / prod booleans as the firebase schema.
+  // Phase-1 single-env setups can flag the same env as both nonprod and
+  // prod until a real env split exists.
+  "environments": {
+    "local": { "nonprod": true, "prod": true }
+  },
+
+  // Test commands — BLOCKING on any failure. Empty array = no test gate
+  // (skip Step 3.1 entirely; intentional opt-out, not a missing field).
+  "testCommands": ["npm test"],
+
+  // Build commands per target environment.
+  "buildCommands": {
+    "local": ["npm run build"]
+  },
+
+  // Deploy commands per target environment — the local-script-specific
+  // field. Each entry is a shell command; they run sequentially, any
+  // non-zero exit fails the deploy.
+  "deployCommands": {
+    "local": ["aide daemon stop", "aide daemon start"]
+  },
+
+  // Optional post-deploy commands per target (smoke checks, etc.).
+  "postDeploy": {
+    "local": []
+  }
+}
+```
+
 ## Non-deployable projects
 
-If invoked in a project with no deployment configuration:
-- Output: "No deployment target configured for this project. To enable deploys, add a `.firebaserc` (Firebase), `Dockerfile` (Docker), or other deployment config."
+If invoked with no `.claude/deploy.json` AND no Firebase config:
+- Output: "No deployment target configured for this project. To enable deploys, add `.claude/deploy.json` (set `kind: \"local-script\"` for non-cloud projects) or a `.firebaserc` (Firebase)."
 - Do not create `deploy.json`.
 - Do not ping telegram.
 
 ## Notes
 
 - Never prompt for confirmation. If checks pass, deploy.
-- Never re-ask about acknowledged gaps in `deploy.json.acknowledgedGaps`.
+- Never re-ask about acknowledged gaps in `deploy.json.acknowledgedGaps` (Firebase only).
 - The `deploy.json` file should be committed to the repo — it contains no secrets.
-- Use `npx firebase-tools@latest` rather than assuming `firebase` is on PATH.
+- Firebase: use `npx firebase-tools@latest` rather than assuming `firebase` is on PATH.
 - For prod deploys, include a note in the output: "Deploying to PRODUCTION" — but do not block or ask for confirmation.
 - If telegram ping fails (script missing, no token), log the failure but continue the deploy — notifications are best-effort.
