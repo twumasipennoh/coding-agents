@@ -30,7 +30,9 @@ The user invokes `/explain` (or says natural-language equivalents like "explain 
 
 3. **Consult the user's profile.** Read `MEMORY.md` and any `user_*` / `feedback_*` memory files relevant to the topic. Especially honor entries that name a calibration preference (e.g., `user_investing_experience.md` says "explain jargon from first principles with numeric scenarios" — that lens applies to any finance topic).
 
-4. **Rewrite at the user's level.** Use plain language, concrete examples, and analogies grounded in things the user is already known to understand (from their user memories). Don't restate the original — produce a fresh explanation. Match the existing memory's preferred lens if one is recorded.
+4. **Rewrite at the user's level — this is the primary deliverable.** Use plain language, concrete examples, and analogies grounded in things the user is already known to understand (from their user memories). Don't restate the original — produce a fresh explanation. Match the existing memory's preferred lens if one is recorded.
+
+   **The rewrite is the visible output of this skill.** If your reply contains only the memory-update confirmation (step 6) and not the rewrite itself, the skill has failed. The confirmation is a postscript to the rewrite, never a substitute for it. A reply with no recalibrated explanation is the failure mode — see "What NOT to do" below.
 
 5. **Update memory — the load-bearing step.** This is what makes the skill compound over time.
    - Look for an existing `user_*` or `feedback_*` memory file that covers this topic. If one exists, **update it** with the new calibration cue (what level worked, what didn't, the lens that landed).
@@ -38,10 +40,10 @@ The user invokes `/explain` (or says natural-language equivalents like "explain 
    - If you create a new file, add a one-line pointer to `MEMORY.md`. If you only updated an existing file, do NOT add a duplicate pointer.
    - **Never** create a generic file like `user_explain_log.md` or `feedback_calibration.md` that accumulates everything. Memory must stay semantically organized by topic, per the auto-memory rules.
 
-6. **Confirm the side-effect in one short sentence at the end.** Examples:
+6. **After the rewrite, confirm the side-effect in one short sentence.** This is a postscript, not the reply itself — the rewrite from step 4 must precede it. Examples:
    - "Updated my notes on SAFE caps — I'll lead with a dollar example next time."
    - "Added a new memory on OAuth — recorded that flow diagrams land better than RFC terminology."
-   - This single line proves the memory write happened. Don't expand into a summary.
+   - This single line proves the memory write happened. Don't expand into a summary, and don't ship it as the whole reply.
 
 ## When to skip the memory update
 
@@ -67,12 +69,29 @@ When you recognize one of these phrasings in a user message, run the full skill 
 
 ## What NOT to do
 
+- **Don't ship only the memory-update confirmation.** The recalibrated rewrite is the deliverable; the confirmation is a postscript. A reply that says "Updated my notes on X — I'll lead with Y next time" and then moves on to other questions is the failure mode kwaku has flagged repeatedly. If your reply does not contain the rewrite, you have not run the skill.
 - Don't dumb down condescendingly. The user is technically fluent in many areas (software, GCP, Firebase, deploys). The miscalibration is usually domain-specific (finance, OAuth, ML, etc.) — recalibrate the topic, not the person.
 - Don't write generic "user wants simpler explanations" memories. Calibration is per-topic.
 - Don't skip the memory update because the recalibration "felt easy." Every invocation is a data point.
 - Don't create a new memory file when an existing one already covers the topic — update in place.
 - Don't add anything to `MEMORY.md` when only updating an existing memory.
 - Don't fabricate a rewrite when there's nothing to recalibrate (first-turn case).
+
+## Inline case — `/explain` as one of several items in a multi-part message
+
+kwaku often replies with a numbered list answering several open questions at once, e.g.:
+
+```
+1. I think just idle timeout
+2. /explain What do you mean?
+3. I think 3 is good
+4. I think continue semantics works
+5. Do we really need this?
+```
+
+When `/explain` (or a natural-language equivalent) appears as one bullet among several, it is **NOT** demoted to a quick acknowledgment. Run the full skill for that bullet: identify the target, consult memory, produce the rewrite, update memory, confirm. Then address the remaining bullets.
+
+The recalibrated rewrite must appear in the reply — labeling it clearly is fine (e.g. `**Re: item 2 —**` or `**On "What do you mean?":**`). If the reply contains the memory-update confirmation but no actual rewrite, the skill has not run. This is a known recurring failure mode (kwaku flagged it on 2026-05-18) — do not repeat it.
 
 ## Loop case — `/explain` after `/explain`
 
