@@ -1,6 +1,6 @@
 # /requirements-clarifier - Engineering Method Q&A
 
-Run the **requirements-clarifier** agent before any feature or bug fix. Walks through 5 engineering method phases with the user.
+Run the **requirements-clarifier** agent before any feature or bug fix. Walks through 5 main engineering method phases with the user, plus optional sub-phases for prior-art survey (1b) and UI mockups (2b).
 
 ## Per-project context
 
@@ -14,23 +14,53 @@ Before each phase, read `<project_root>/.claude/clarifier-context.md` if it exis
 
 - `/requirements-clarifier` — run all phases sequentially
 - `/requirements-clarifier all` — same as above
-- `/requirements-clarifier phase 1` through `phase 5` — run a single phase
+- `/requirements-clarifier phase 1` through `phase 5` — run a single main phase
+- `/requirements-clarifier phase 1b` — run the prior-art survey sub-phase standalone
+- `/requirements-clarifier phase 2b` — run the UI mockup sub-phase standalone
 
 ## Phases
 
 ### Phase 1 — Explore
-Restate the problem in your own words. Ask clarifying questions about scope. Walk through 2-3 concrete user scenarios. Identify edge cases and corner cases the user may not have considered.
+Walk through four sub-sections in order. Each is a discussion, not a checklist — adapt depth to the size of the idea.
 
-**User experience & onboarding:** For every scenario, also ask:
+**Scope & Scenarios.** Restate the problem in your own words. Ask clarifying questions about scope. Walk through 2-3 concrete user scenarios. Identify edge cases and corner cases the user may not have considered.
+
+**Constraints.** Surface and confirm the constraints that bound the idea: must-work-offline, performance ceilings, platform requirements, regulatory/privacy boundaries, deadlines, team capacity, integration limits, anything else that fences the solution space. Constraints are not the same as requirements — they're what *can't* change, not what we're trying to build. If the user hasn't named any, prompt for the obvious ones given the project context.
+
+**UX & onboarding.** For every scenario, also ask:
 - What does a first-time user see when they encounter this feature? Is there an empty state, a first-run experience, or a prompt that guides them?
 - Does this need onboarding — a tooltip, a walkthrough, inline hints — or is it self-explanatory from context?
-- Could this be part of an existing feature instead of a new surface? Research what already exists and suggest bundling if it would simplify the user's mental model.
+- Within this feature's surface area, could parts of it bundle into existing UI/flows the user already knows, instead of introducing new surfaces? (Cross-project / external prior art is covered in Phase 1b — keep this scoped to bundling *within* the feature.)
 - What is the minimum the user needs to learn to use this? Can we reduce it?
 
-**GATE: Pause after this phase and wait for user input before proceeding.**
+**Complexity check (active, two-way).** Form an opinion: is this idea over-complicated for the value it delivers? Look for too many moving parts, surface area larger than necessary, scope that's drifted beyond the core need, or coupling that will produce bugs. If you think it's over-complicated, say so explicitly and propose specific simplifications — e.g., "cut X, defer Y to a follow-up, fold Z into existing surface area." The user accepts, pushes back ("Z genuinely needs to be in scope because…"), or counter-proposes. Iterate until you both agree on a version that has few moving parts, is appropriate for the idea, and is as easy to understand as possible. If the idea is already right-sized, say so plainly in one sentence and move on — don't manufacture friction.
+
+**GATE: Pause after this phase and wait for user input before proceeding to Phase 1b.** Phase 1b's prior-art survey runs against the *agreed-on* (possibly simplified) version of the idea, not the original.
+
+### Phase 1b — Prior Art Survey
+Surface what already exists, both inside the user's other projects and in the wider package/app ecosystem, so the user can make an informed build/buy/hybrid decision before any approach is brainstormed in Phase 2.
+
+**Trivial-skip exit.** If the change is genuinely trivial (a one-line tweak, a copy-only edit, a clearly scoped bug fix with no architectural choice), say so at the start of this phase and ask the user to confirm skipping. If confirmed, short-circuit straight to Phase 2 with no build/buy framing.
+
+**Step 1 — Cross-project grep.** Eagerly search across the user's other projects under `~/projects/*` for similar implementations. Match the convention used by `/pr` and `/merged`: iterate directories under `~/projects/` that contain a `.git`, and run `Grep` for the keywords and symbols that define the feature (component names, function names, domain terms, file-name patterns). For each hit, note the project, file path, and a one-line summary of what's there. Don't grep the current project for this — Phase 1's UX sub-section already covers within-feature bundling.
+
+**Step 2 — Web search & package survey.** Run `WebSearch` for relevant npm/pip/cargo packages, libraries, apps, or real-world implementations in the problem space. For each candidate worth raising, capture: name, what it does, rough size / dep count, license, maintenance status (recent commits, last release, open issues at a glance), and obvious fit/misfit against the constraints from Phase 1. If WebSearch is unavailable (offline, hook denied), report that and continue with cross-project grep findings only — don't fail the phase.
+
+**Step 3 — Surface options + their constraints.** Present what you found as a flat list — no ranking yet. For each option, state what adopting it would constrain (e.g., "Fuse.js — adds ~10KB, MIT, last release 4 months ago, requires you to flatten the data shape it indexes") so the tradeoff is visible. If nothing relevant turned up, say so plainly: "no prior art across `~/projects/*`, no obvious package — build path is the realistic default."
+
+**Step 4 — Build/buy/hybrid decision.** Ask the user to choose: build, buy (adopt one of the surfaced options), or hybrid (use a surfaced option for part of the scope and build the rest). Capture which surfaced options the buy/hybrid path would use. This decision is what Phase 2 brainstorms against.
+
+**Known limitation:** as `~/projects/*` grows past ~30 projects, the cross-project grep gets slow. If that becomes a problem, add a project allowlist or last-modified filter — out of scope for this skill version.
+
+**GATE: Pause after this phase and wait for the user to lock in the build/buy/hybrid decision before proceeding to Phase 2.**
 
 ### Phase 2 — Brainstorm
-Present 2-3 implementation approaches with pros and cons for each. Consider: complexity, maintainability, backwards compatibility, testability, performance. Do not commit to an approach yet.
+Use the build/buy/hybrid decision locked in at Phase 1b. The 2-3 approaches you brainstorm should be approaches *within* that path, not across it:
+- If **build** → approaches are different ways to build the feature (today's behavior).
+- If **buy** → approaches are different ways to integrate/wrap the chosen package or app (where it lives in the codebase, config strategy, how it's mocked in tests, what adapter layer if any).
+- If **hybrid** → approaches are different ways to combine the bought piece with the built piece (which seams go where, how state flows between them).
+
+Present 2-3 approaches with pros and cons for each. Consider: complexity, maintainability, backwards compatibility, testability, performance. Do not commit to an approach yet.
 
 **Per-approach testability blurb:** For each approach, include a 1-2 sentence note in its pros/cons covering how the feature could be verified end-to-end under that strategy — what's automatable, what's likely manual, and any obvious testability tradeoff vs. the other approaches. Surface testability now so it factors into the comparison, not after the choice is locked.
 
@@ -86,6 +116,8 @@ Define use cases to verify the implementation as Given/When/Then scenarios. Buil
 ### Phase 5 — Plan
 Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If mockups were approved, reference them as the visual spec. Fold in the test scenarios from Phase 4 as the acceptance criterion.
 
+**Reference the Phase 1b decision.** State which path won — build, buy (and which package/app), or hybrid (and which pieces are bought vs. built). This anchors the plan so the build/buy/hybrid choice survives intact to implementation rather than getting forgotten between phases.
+
 **GATE: Present the full summary and ask the user to confirm before proceeding to implementation.**
 
 ## Notes
@@ -93,5 +125,7 @@ Explain what the change means in plain language — not file-level details, but 
 - Every phase is a GATE — do not proceed until the user explicitly responds.
 - The goal is alignment, not implementation. Only proceed to the feature pipeline after the user explicitly confirms the summary.
 - If running a single phase, still pause at the end of that phase for user input.
+- Phase 1b runs against the *simplified* idea agreed on in Phase 1's complexity check, not the original — surveying prior art for a bloated version wastes the survey.
+- Phase 2 brainstorms approaches *within* the build/buy/hybrid path locked at Phase 1b, not across it.
 - Phase 2b mockups are auto-committed and auto-PR'd by the `/mockup` skill — never prompt about commits or PRs.
 - If a Phase 3 testability finding materially undermines the chosen approach, bounce back to Phase 2 and pick a more testable alternative rather than silently patching.
