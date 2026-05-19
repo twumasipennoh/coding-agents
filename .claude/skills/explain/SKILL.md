@@ -18,6 +18,20 @@ The user invokes `/explain` (or says natural-language equivalents like "explain 
 - `/explain` — recalibrate the most recent assistant message.
 - `/explain "post-money valuation cap"` — recalibrate just that phrase (plus minimal surrounding context if needed for sense).
 
+## Turn ordering — read this before anything else
+
+This skill almost always runs inside an openclaw session, where the gateway runs Claude CLI with `--output-format json` and **returns only the final assistant turn's text to telegram**. Any tool call emitted *after* a text block creates a new turn boundary; prior text in earlier turns is silently dropped.
+
+The naturally-tempting ordering — write the rewrite, then update memory, then write the confirmation — produces exactly three turns. Only the confirmation reaches the user. The rewrite (the actual deliverable) is dropped. This has been the recurring failure mode every time /explain has shipped only a "Updated my notes on X…" line. See CLAUDE.md "Final output ordering."
+
+**The required ordering is:**
+
+1. Do all memory **reads** (consult profile).
+2. Do all memory **writes** (Edit/Write the topic file, optionally Edit MEMORY.md).
+3. **Then** emit the rewrite + confirmation **together as the final assistant turn**, with no tool calls after them.
+
+The rewrite and confirmation must be in the same final assistant message. Do not emit any user-facing text before all memory tool calls have completed. If you have already emitted the rewrite as text and then catch yourself about to call Edit/Write on a memory file, stop — that order is the failure. Restart by doing the memory write first, then re-emitting the rewrite + confirmation together as the final turn.
+
 ## Steps
 
 1. **Identify what to recalibrate.**
@@ -30,20 +44,19 @@ The user invokes `/explain` (or says natural-language equivalents like "explain 
 
 3. **Consult the user's profile.** Read `MEMORY.md` and any `user_*` / `feedback_*` memory files relevant to the topic. Especially honor entries that name a calibration preference (e.g., `user_investing_experience.md` says "explain jargon from first principles with numeric scenarios" — that lens applies to any finance topic).
 
-4. **Rewrite at the user's level — this is the primary deliverable.** Use plain language, concrete examples, and analogies grounded in things the user is already known to understand (from their user memories). Don't restate the original — produce a fresh explanation. Match the existing memory's preferred lens if one is recorded.
+4. **Draft the rewrite internally — do NOT emit it yet.** Use plain language, concrete examples, and analogies grounded in things the user is already known to understand (from their user memories). Don't restate the original — produce a fresh explanation. Match the existing memory's preferred lens if one is recorded. Hold this draft in your working context; it will be emitted in step 6 as part of the final turn.
 
-   **The rewrite is the visible output of this skill.** If your reply contains only the memory-update confirmation (step 6) and not the rewrite itself, the skill has failed. The confirmation is a postscript to the rewrite, never a substitute for it. A reply with no recalibrated explanation is the failure mode — see "What NOT to do" below.
-
-5. **Update memory — the load-bearing step.** This is what makes the skill compound over time.
+5. **Update memory now, before any text is emitted — the load-bearing step.** This is what makes the skill compound over time, and doing it here (not after the rewrite) is what keeps the rewrite from being dropped by the gateway. See "Turn ordering" above.
    - Look for an existing `user_*` or `feedback_*` memory file that covers this topic. If one exists, **update it** with the new calibration cue (what level worked, what didn't, the lens that landed).
    - If no relevant memory exists, **create a new one**. Use the auto-memory format (frontmatter with name/description/type, body covering the calibration signal). For a knowledge-level note, use `type: user`. For a "how to explain this to me" rule, use `type: feedback` with **Why:** and **How to apply:** lines.
    - If you create a new file, add a one-line pointer to `MEMORY.md`. If you only updated an existing file, do NOT add a duplicate pointer.
    - **Never** create a generic file like `user_explain_log.md` or `feedback_calibration.md` that accumulates everything. Memory must stay semantically organized by topic, per the auto-memory rules.
 
-6. **After the rewrite, confirm the side-effect in one short sentence.** This is a postscript, not the reply itself — the rewrite from step 4 must precede it. Examples:
+6. **Emit the rewrite + confirmation together as the final assistant turn.** The rewrite from step 4 is the primary deliverable; the confirmation is a one-line postscript proving the memory write happened. Both go in the **same** final assistant message, with **no tool calls after**. Confirmation examples:
    - "Updated my notes on SAFE caps — I'll lead with a dollar example next time."
    - "Added a new memory on OAuth — recorded that flow diagrams land better than RFC terminology."
-   - This single line proves the memory write happened. Don't expand into a summary, and don't ship it as the whole reply.
+
+   **The rewrite is the visible output of this skill.** If your final turn contains only the confirmation and not the rewrite itself, the skill has failed — that is the exact failure shape this skill's turn-ordering rule exists to prevent.
 
 ## When to skip the memory update
 
@@ -69,7 +82,8 @@ When you recognize one of these phrasings in a user message, run the full skill 
 
 ## What NOT to do
 
-- **Don't ship only the memory-update confirmation.** The recalibrated rewrite is the deliverable; the confirmation is a postscript. A reply that says "Updated my notes on X — I'll lead with Y next time" and then moves on to other questions is the failure mode kwaku has flagged repeatedly. If your reply does not contain the rewrite, you have not run the skill.
+- **Don't ship only the memory-update confirmation.** The recalibrated rewrite is the deliverable; the confirmation is a postscript. A reply that says "Updated my notes on X — I'll lead with Y next time" and then moves on to other questions is the failure mode kwaku has flagged repeatedly. If your reply does not contain the rewrite, you have not run the skill. The single most common cause is wrong turn ordering — see "Turn ordering" at the top.
+- **Don't emit the rewrite before doing the memory write.** Even if it's tempting to "show progress" by writing the rewrite first and updating memory after, that ordering causes the gateway to drop the rewrite. Memory writes happen first; rewrite + confirmation go in the final turn together.
 - Don't dumb down condescendingly. The user is technically fluent in many areas (software, GCP, Firebase, deploys). The miscalibration is usually domain-specific (finance, OAuth, ML, etc.) — recalibrate the topic, not the person.
 - Don't write generic "user wants simpler explanations" memories. Calibration is per-topic.
 - Don't skip the memory update because the recalibration "felt easy." Every invocation is a data point.
@@ -91,7 +105,7 @@ kwaku often replies with a numbered list answering several open questions at onc
 
 When `/explain` (or a natural-language equivalent) appears as one bullet among several, it is **NOT** demoted to a quick acknowledgment. Run the full skill for that bullet: identify the target, consult memory, produce the rewrite, update memory, confirm. Then address the remaining bullets.
 
-The recalibrated rewrite must appear in the reply — labeling it clearly is fine (e.g. `**Re: item 2 —**` or `**On "What do you mean?":**`). If the reply contains the memory-update confirmation but no actual rewrite, the skill has not run. This is a known recurring failure mode (kwaku flagged it on 2026-05-18) — do not repeat it.
+The recalibrated rewrite must appear in the reply — labeling it clearly is fine (e.g. `**Re: item 2 —**` or `**On "What do you mean?":**`). If the reply contains the memory-update confirmation but no actual rewrite, the skill has not run. This is a known recurring failure mode (kwaku flagged it on 2026-05-18, and again on 2026-05-19) — do not repeat it. The turn-ordering rule at the top applies here too: all memory writes before any text, rewrite + confirmation together as the final turn. The multi-part reply (covering items 1, 3, 4, 5 alongside the /explain item) is the final turn — its composition must respect the same rule.
 
 ## Loop case — `/explain` after `/explain`
 

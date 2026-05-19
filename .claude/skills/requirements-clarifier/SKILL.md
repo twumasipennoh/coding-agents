@@ -1,5 +1,7 @@
 # /requirements-clarifier - Engineering Method Q&A
 
+> **Final output ordering (critical):** every phase ends with a GATE — a user-facing message (findings, brainstormed approaches, evaluation, test scenarios, or the plan). That GATE message is the deliverable of the phase. Do all tool calls for the phase *before* emitting it: read `clarifier-context.md`, run cross-project `Grep`, run `WebSearch`, invoke `/mockup`, etc., FIRST — then the final assistant message contains the phase findings + the GATE prompt, with **no tool calls after it**. `--output-format json` returns only the final turn's text, so any phase findings emitted before a subsequent tool call are silently dropped. Phase 1b is the highest-risk phase here (cross-project Grep + WebSearch) — collect all results, then emit the surfaced-options block + build/buy/hybrid prompt as a single closing turn.
+
 Run the **requirements-clarifier** agent before any feature or bug fix. Walks through 5 main engineering method phases with the user, plus optional sub-phases for prior-art survey (1b) and UI mockups (2b).
 
 ## Per-project context
