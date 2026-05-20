@@ -1,5 +1,7 @@
 # /feature-gates-check - Check Gates for Current Feature
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `feature-gates-check`, display name `Feature Gates Check`. Call `begin feature-gates-check "Feature Gates Check" --total 4` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end feature-gates-check --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+
 Find the in-progress feature, determine which gates have already passed, run any missing ones, and report overall completeness.
 
 ## Steps

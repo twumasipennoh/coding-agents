@@ -1,5 +1,7 @@
 # /pre-flight - Pre-Feature Validation
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `pre-flight`, display name `Pre-Flight`. Call `begin pre-flight "Pre-Flight" --total 6` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end pre-flight --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+
 Run the **pre-flight** agent standalone to validate project health before starting a feature.
 
 ## Steps

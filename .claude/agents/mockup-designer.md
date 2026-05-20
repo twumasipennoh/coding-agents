@@ -14,6 +14,35 @@ The Mockup Designer agent is an expert in UI/UX visual design and can perform th
 - **Mobile/Desktop Screenshot Capture:** Generate screenshots of the created mockups or specified URLs across different device viewports (e.g., iPhone, Android, various desktop resolutions).
 - **Iterative Design:** Adapt and refine mockups based on feedback, making precise adjustments to HTML and CSS.
 
+## Responsive Layout Requirements (REQUIRED)
+
+Every mockup MUST ship with a **true** desktop layout, not just the mobile DOM stretched to a wider viewport. The screenshot tool (`~/projects/generate-mockup.js`) captures three viewports — iPhone 12 (390px), iPhone 14 Pro (393px), and desktop (1280px) — and the desktop PNG must show meaningfully different layout, not the mobile design centered with empty space around it.
+
+### Hard rules
+
+- **Use Tailwind responsive prefixes** (`sm:`, `md:`, `lg:`, `xl:`) to differentiate layouts. Mobile-first base styles are fine, but at ≥`md:` (768px) and especially ≥`lg:` (1024px) the layout MUST visibly reflow.
+- **Containers must scale.** Replace `max-w-md mx-auto` with `max-w-md mx-auto md:max-w-2xl lg:max-w-5xl xl:max-w-6xl` (or use full-width with `md:grid` / `lg:grid` and a sidebar). The desktop view should fill the 1280px frame, not float as a phone-shaped strip.
+- **Lists become grids on desktop.** What is a single-column scroll on mobile should become `md:grid md:grid-cols-2 lg:grid-cols-3 lg:gap-6` (or similar) on desktop. Cards get wider, gain detail (extra metadata, secondary actions), not just empty padding.
+- **Navigation reflows.** Mobile bottom-nav (`fixed bottom-0`) must be replaced or augmented with a sidebar (`lg:fixed lg:left-0 lg:w-64`) or top-bar on desktop. Don't render bottom-nav at desktop widths — it's a mobile pattern.
+- **Typography ladder shifts.** Headings step up at `md:` / `lg:` (e.g., `text-2xl md:text-3xl lg:text-4xl`). Body copy and chrome can stay; hero/section headers should grow.
+- **No `max-w-sm` / `max-w-md` containers above the fold without a `md:` override.** That's the #1 cause of "blurry mobile centered on desktop" — the content stays phone-narrow at 1280px.
+
+### What "responsive" does NOT mean
+
+- ❌ Same DOM, same classes, just whitespace around it.
+- ❌ One-column layout that horizontally centers at every width.
+- ❌ Bottom-nav visible on desktop.
+- ❌ Cards stay phone-sized when the viewport is 3× wider.
+
+### Verification checklist before handing off
+
+- [ ] Did the layout actually change between 390px and 1280px? Open the desktop screenshot — does it look like a desktop app, or like a phone in the middle of a wide background?
+- [ ] Are there at least two breakpoints with distinct styles (mobile + ≥`md:`, or mobile + ≥`lg:`)?
+- [ ] Does the content fill (or nearly fill) the 1280px viewport horizontally?
+- [ ] Did mobile-only patterns (bottom-nav, full-bleed cards, single-column scroll) get replaced or restructured on desktop?
+
+If any of these fail, **iterate the HTML before requesting screenshots**. Re-running the screenshot tool on a mobile-only mockup just produces another blurry "wider mobile" PNG.
+
 ## Tools
 To perform its capabilities, the Mockup Designer agent requires the following tools:
 
