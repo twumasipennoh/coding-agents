@@ -12,6 +12,28 @@ Run the **mockup-designer** agent to generate a standalone HTML mockup with Tail
 
 If no name is given, ask the user which feature or screen to mockup.
 
+## Variants Mode
+
+If the user asks for multiple variants, options, versions, or alternatives ("3 takes on...", "compare A/B for...", "show me variants of..."), the agent produces N separate HTML files instead of one composite, and the skill sends THREE separate telegram albums (one per viewport) so each form factor compares at full resolution.
+
+### Step overrides in variants mode
+
+- **HTML step:** `mockup-designer` writes `docs/mockups/<feature>-variant-{a,b,c,…}.html` (one file per variant, lowercase letters in order). See the agent's "Variants Mode" section for content requirements.
+- **Lint step (if this skill defines one):** Run `lint-mockup.sh` **once per variant file**. Any blocking failure in any variant blocks the whole batch.
+- **Screenshot step:** Run `generate-mockup.js` once per variant HTML. Produces `<feature>-variant-{a,b,c}-{iphone12,iphone14pro,desktop}.png` (N × 3 PNGs total).
+- **Telegram step:** Send THREE albums instead of one — one per viewport — so each form factor tiles cleanly:
+  ```bash
+  ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — iPhone 12" \
+    docs/mockups/<feature>-variant-*-iphone12.png
+  ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — iPhone 14 Pro" \
+    docs/mockups/<feature>-variant-*-iphone14pro.png
+  ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — desktop" \
+    docs/mockups/<feature>-variant-*-desktop.png
+  ```
+- **Commit/PR step:** `git add docs/mockups/<feature>-variant-*.{html,png}` catches all N HTMLs and 3N PNGs. Branch: `mockup/<feature>-variants`. Commit: `docs: add <feature> UI mockup variants`.
+
+Single-mockup mode (one design, no variants) is unchanged — keep the existing single-file flow.
+
 ## Steps
 
 ### 1. Run mockup-designer agent
@@ -41,9 +63,10 @@ Run the screenshot tool:
 node ~/projects/generate-mockup.js docs/mockups/<feature-name>.html
 ```
 
-This captures:
-- **Mobile** at 375px width → `docs/mockups/<feature-name>-mobile.png`
-- **Desktop** at 1440px width → `docs/mockups/<feature-name>-desktop.png`
+This captures three viewports (per `~/projects/generate-mockup.js`):
+- **iPhone 12** at 390px → `docs/mockups/<feature-name>-iphone12.png`
+- **iPhone 14 Pro** at 393px → `docs/mockups/<feature-name>-iphone14pro.png`
+- **Desktop** at 1280px → `docs/mockups/<feature-name>-desktop.png`
 
 ### 4. Send screenshots to telegram (auto-suppressed in IDE sessions)
 
@@ -63,7 +86,7 @@ Automatically commit the HTML file and screenshots, create a PR, and present the
 
 ```bash
 git checkout -b mockup/<feature-name>
-git add docs/mockups/<feature-name>.html docs/mockups/<feature-name>-mobile.png docs/mockups/<feature-name>-desktop.png
+git add docs/mockups/<feature-name>.html docs/mockups/<feature-name>-*.png
 git commit -m "docs: add <feature-name> UI mockup and screenshots"
 git push -u origin mockup/<feature-name>
 gh pr create --title "Mockup: <feature-name>" --body "UI mockup for <feature-name>. Review the screenshots below."
@@ -74,9 +97,10 @@ Then present the PR link and screenshot paths to the user for visual go/no-go:
 ```
 Mockup generated, committed, and PR created:
   PR:      <pr-url>
-  HTML:    docs/mockups/<feature-name>.html
-  Mobile:  docs/mockups/<feature-name>-mobile.png
-  Desktop: docs/mockups/<feature-name>-desktop.png
+  HTML:      docs/mockups/<feature-name>.html
+  iPhone 12: docs/mockups/<feature-name>-iphone12.png
+  iPhone 14: docs/mockups/<feature-name>-iphone14pro.png
+  Desktop:   docs/mockups/<feature-name>-desktop.png
 
 Does this look right? Approve to proceed to implementation, or describe changes needed.
 ```

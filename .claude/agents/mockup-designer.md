@@ -43,6 +43,28 @@ Every mockup MUST ship with a **true** desktop layout, not just the mobile DOM s
 
 If any of these fail, **iterate the HTML before requesting screenshots**. Re-running the screenshot tool on a mobile-only mockup just produces another blurry "wider mobile" PNG.
 
+## Variants Mode (when comparing alternatives)
+
+When the user asks for multiple variants, options, versions, or alternatives ("3 takes on...", "compare A/B for...", "show me variants of..."), do NOT bundle them into one HTML file with variant cards stacked vertically. Each variant must be its own standalone HTML file.
+
+### File layout
+
+For a feature `<feature-name>` with N variants:
+- `docs/mockups/<feature-name>-variant-a.html`
+- `docs/mockups/<feature-name>-variant-b.html`
+- `docs/mockups/<feature-name>-variant-c.html`
+- (etc., lowercase letters in order)
+
+Each file is a **complete, self-contained mockup** — same chrome (nav, header, viewport meta, Tailwind CDN), same Responsive Layout Requirements above, same token palette compliance. The variant difference is in the screen content itself (different layouts, copy, interaction patterns), NOT in cross-cutting concerns.
+
+### Why separate files
+
+The screenshot tool captures `fullPage: true` per HTML. One HTML with N variants stacked vertically produces a tall narrow PNG that Telegram thumbnails into a thin unreadable strip. N separate HTMLs produce N native-aspect-ratio PNGs that Telegram tiles into a swipeable album at full resolution.
+
+### Single-mockup mode unchanged
+
+If only ONE design is being mocked, write a single `<feature-name>.html` file as before. Variants mode is opt-in based on user intent — don't proactively produce variants when one mockup was asked for.
+
 ## Tools
 To perform its capabilities, the Mockup Designer agent requires the following tools:
 
