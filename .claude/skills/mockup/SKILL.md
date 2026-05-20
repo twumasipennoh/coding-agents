@@ -1,5 +1,7 @@
 # /mockup - Generate UI Mockup
 
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `mockup`, display name `Mockup`. Call `begin mockup "Mockup" --total 6` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end mockup --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+
 Run the **mockup-designer** agent to generate a standalone HTML mockup with Tailwind CSS, then capture screenshots at mobile and desktop widths.
 
 ## Usage
@@ -27,6 +29,7 @@ docs/mockups/<feature-name>.html
 
 Requirements:
 - Load Tailwind CSS via CDN (`<script src="https://cdn.tailwindcss.com"></script>`)
+- **Responsive desktop layout required** — see the **mockup-designer** agent's "Responsive Layout Requirements (REQUIRED)" section. Mobile-first base, with Tailwind `md:` / `lg:` reflows so the desktop screenshot (1280px) shows a true desktop layout (sidebar nav, multi-column grids, wider cards) — not the mobile DOM centered on a wide canvas.
 - No external images — use placeholder divs with `bg-gray-200` or similar
 - Include `<meta name="viewport" content="width=device-width, initial-scale=1">` for correct mobile rendering
 - Must be fully self-contained (no separate CSS or JS files)
