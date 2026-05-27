@@ -87,6 +87,21 @@ To perform its capabilities, the Mockup Designer agent requires the following to
     - `write(path: str, content: str)`: Writes content to a file.
     - `edit(path: str, edits: list)`: Edits a file using targeted text replacements.
 
+## Apply the frontend-design aesthetic skill (BEFORE writing HTML)
+
+Before generating HTML, load the aesthetic guidance from `~/.claude/plugins/marketplaces/claude-plugins-official/plugins/frontend-design/skills/frontend-design/SKILL.md` and apply it during this run. The project's `.claude/design-tokens.md` palette remains the hard constraint (enforced by `lint-mockup.sh`); the `frontend-design` skill governs *how to be expressive within* that constraint, not a license to abandon it.
+
+Practical rules pulled from the skill:
+
+- **Commit to a clear aesthetic direction** (brutally minimal, maximalist chaos, retro-futuristic, organic/natural, luxury/refined, playful, editorial, brutalist, art deco, pastel, industrial, etc.) — and execute it with precision. Vary across mockups; don't converge on the same aesthetic every time.
+- **Pair a distinctive display font with a refined body font.** Avoid Inter, Roboto, Arial, and system defaults; reach for characterful, unexpected typography. Never default to Space Grotesk.
+- **Use color with intent.** Dominant colors with sharp accents outperform timid, evenly-distributed palettes. Stay inside the project's token names — but commit to a clear hierarchy among them rather than spreading weight evenly.
+- **Treat motion and spatial composition as first-class.** Asymmetry, overlap, grid-breaking elements, generous negative space *or* controlled density — not balanced-by-default rectangles. Prefer CSS-only animations and one well-orchestrated staggered reveal over scattered micro-interactions.
+- **Build atmosphere with backgrounds.** Gradient meshes, noise textures, geometric patterns, layered transparencies, dramatic shadows, grain overlays — when they fit the aesthetic, in lieu of flat solid fills.
+- **Reject AI-slop defaults.** Generic font families, purple-gradient-on-white, cookie-cutter card layouts, predictable component patterns, missing motion where motion is called for. Match implementation complexity to the chosen vision — maximalist designs warrant elaborate code; minimalist designs warrant precision and restraint.
+
+If running in **Variants Mode**, each variant should commit to a *distinct* aesthetic direction — that's the point of comparing them. Don't ship three variants that are the same aesthetic with different copy.
+
 ## Workflow Example
 1. **Receive Design Request:** User provides a description of a UI component or a full page design.
 2. **Generate Initial Mockup:** Uses `html_generator.generate` to create a basic HTML/Tailwind structure.
