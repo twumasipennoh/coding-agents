@@ -42,6 +42,12 @@ Invoke the **mockup-designer** agent with the feature/screen name. The agent wil
 - Review the relevant feature spec or PRD section
 - Design the screen UI
 
+### 1b. Apply the frontend-design aesthetic skill
+
+Before writing HTML, the mockup-designer agent must load `~/.claude/plugins/marketplaces/claude-plugins-official/plugins/frontend-design/skills/frontend-design/SKILL.md` and apply its aesthetic guidance — commit to a bold direction, choose distinctive typography (no Inter/Roboto/Arial/Space Grotesk defaults), use color with intentional hierarchy, treat motion and spatial composition as first-class, build atmosphere instead of flat fills, and reject AI-slop defaults (purple-on-white, cookie-cutter cards, predictable layouts). See the agent's "Apply the frontend-design aesthetic skill (BEFORE writing HTML)" section for the full rules.
+
+The project's `.claude/design-tokens.md` palette is still the hard constraint (`lint-mockup.sh` blocks off-palette utilities); the aesthetic skill governs expression *within* that palette, not deviation from it.
+
 ### 2. Generate standalone HTML file
 
 Write a single self-contained HTML file at:
