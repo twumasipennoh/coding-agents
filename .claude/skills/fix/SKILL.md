@@ -43,7 +43,24 @@ After the fix is written, run all gates:
 **Then sequentially:**
 - **test-runner** using this project's configured test command
 
-### 4. Report
+### 4. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with outcome
++ gate summary.** Pattern:
+
+    fix: <one-line outcome>. gates: <N/M passed>. <"push?" if green,
+    "blocker: <one-line>" if red>
+
+If multiple gates failed, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent failure, offer the rest
+if asked.
+
+The structured Diagnosis/Fix/Gate Results format is **opt-in only** —
+emit it only when the user explicitly asks for "the full breakdown",
+"expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Bug Fix — <summary>
@@ -61,6 +78,7 @@ Final: ✅ GO / ❌ NO-GO
 ```
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - Do NOT write any fix code before fix-advocate completes Steps 1-6 AND the user explicitly approves.
 - If the user says "just fix it", still run fix-advocate first — this is non-negotiable.
 - Keep the fix minimal. Resist the urge to clean up surrounding code.

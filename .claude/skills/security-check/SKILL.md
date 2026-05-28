@@ -40,7 +40,24 @@ Scan the codebase for common security issues mapped to the SECURITY PLAN TO-DOs 
 - Search log statements for potential token/secret leakage.
 - Check that OAuth tokens, passwords, and API keys are not logged.
 
-## Output Format
+## Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with N
+passed + top finding.** Pattern:
+
+    security-check: N passed, M ⚠. top: <one-line finding>.
+    clean / fix-now?
+
+If multiple categories flagged issues, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent finding, offer the rest
+if asked.
+
+The structured per-category audit format is **opt-in only** — emit
+it only when the user explicitly asks for "the full breakdown",
+"expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Security Audit Results:
@@ -56,5 +73,6 @@ Logging:          No secrets in logs (or X potential leaks)
 List details for any warnings.
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - This is a static analysis scan, not a penetration test.
 - False positives in test files are expected — note them but don't flag as critical.

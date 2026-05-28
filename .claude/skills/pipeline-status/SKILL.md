@@ -69,16 +69,29 @@ Feature 9 — Habit Reminders (Task 9.2)
    - The specific task currently being worked on
    - Any deferred tasks (`[-]`)
 
-### 5. Summary
+### 5. Reply format
 
-```
-Pipeline Summary:
-  In progress: <N> feature(s)
-  Current step: <step name> for <feature name>
-  Next action: <what needs to happen next>
-```
+**Default chat reply: 1-3 sentences, no template, lead with current
+step + last result + next action.** Pattern:
+
+    pipeline <id>: step N/M (<current step>), <last result>.
+    <continue/blocked>?
+
+If multiple pipelines are active concurrently, apply the one-beat
+rule from `~/.claude/CLAUDE.md § "Multi-part answers — one beat per
+turn"` — open with the count, deliver the most urgent piece, offer
+the rest if asked.
+
+The structured step-by-step tracker (active pipelines block,
+per-feature progress, cross-reference with FEATURE_PROMPTS) is
+**opt-in only** — emit it only when the user explicitly asks for "the
+full breakdown", "expand", or "details". Don't lead with it.
+
+If asked to expand, use the templates from steps 1, 3, and 4 above
+(active pipelines block, per-feature progress, summary).
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured tracker is opt-in only.
 - This skill is read-only — it does not modify any files.
 - The feature-tracking state file (`docs/prompts/.pipeline-state.json`) is written by the `feature-implementer` agent and cleaned up by the `doc-updater` agent when a feature is marked ✅ COMPLETE.
 - The step-announcement audit log (`~/.claude/state/pipelines/*.jsonl`) is written by `pipeline-step.sh` and reaped at 30 days by the daily cron.

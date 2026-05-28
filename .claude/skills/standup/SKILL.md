@@ -30,7 +30,28 @@ Run: `~/.claude/scripts/rotate-secret.sh status --due-only`
 
 If output contains `✗` (overdue) or `⚠` (due within 14 days) lines, capture them for the "Secrets due" section in step 5. If output is `No secrets due in the next 14 days.` — omit the Secrets section entirely. The full system is documented in `~/.claude/CLAUDE.md § "Secret rotation"`.
 
-### 5. Format output
+### 5. Reply format
+
+**Default chat reply: 1-3 sentences, no template, no section headers,
+no bullet lists.** Standup is a quick check-in — it should read like a
+Telegram message, not a memo. Pattern:
+
+    standup <date>: yesterday — <one-line summary of commits>. today —
+    <feature> task X.Y, <next step>, <N>/<M> remaining. <"no blockers"
+    OR "blocked: <one-line>">.<" secrets due: <one-line>" if any, else
+    omit>
+
+If something needs more than one line (e.g. 3 distinct blockers, or
+overdue secrets that need action), apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers"` — open with the count,
+deliver the most urgent piece, offer the rest if asked.
+
+The structured multi-section format (yesterday/today/blockers/secrets
+as labeled blocks with bullets) is **opt-in only** — emit it only when
+the user explicitly asks for "the full breakdown" or "expand". Don't
+lead with it.
+
+If asked to expand, use this template:
 
 ```
 Standup — <date>
@@ -55,6 +76,6 @@ Secrets due:
 ```
 
 ## Notes
-- Keep this brief — 10 lines or fewer total (the Secrets due section is silent on quiet days).
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - If git log shows no commits, note that.
 - If FEATURE_PROMPTS.md doesn't exist, say so under Today.

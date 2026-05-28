@@ -137,7 +137,28 @@ In `--all-merged` mode, this section is redundant — the sweep already touched 
 
 ## Final Report
 
-Single output block, one line per project plus a footer:
+**Default chat reply: one line.** The audit trail is already in git
+history (merge commits, branch deletes) and was emitted by
+`pipeline-step.sh` during the run — no need to re-narrate per-repo in
+chat. Pattern:
+
+    merged: <N> PRs cleaned across <M> repos. top: <one-line of most notable cleanup>. <"clean" OR "needs follow-up: <one-line>">
+
+Examples:
+
+    merged: 19 PRs cleaned across 4 repos. top: HabitTracker 9 deleted + 1 kept (PR #54 closed). clean.
+
+    merged: 23 PRs cleaned across 5 repos. top: Insem 9 deleted. needs follow-up: MediaTracker stash remains — run `git stash pop`.
+
+Pick the "top" line by impact: most branches deleted, the only repo with
+exceptions, or the only one needing manual follow-up — whatever the user
+most needs to see. Free-text annotation from the invocation, if any,
+goes on its own line under the one-liner.
+
+The structured per-repo block (one line per project + Notes footer) is
+**opt-in only** — emit it only when the user asks for "the full
+breakdown" or "expand". Don't lead with it. For reference, the opt-in
+shape:
 
 ```
 Insem_SocialMediaAggregator: aligned with origin/main, deleted 9 branches (chore/foo, chore/bar, ...)
@@ -150,6 +171,11 @@ Notes:
   - HabitTracker: 3 stale local branches (no recent PR). Run `/merged --all-merged` to clean.
   - MediaTracker: stash from skill remains — run `git stash pop` manually.
 ```
+
+If the run had a true multi-axis result (e.g. 3 distinct follow-up items
+across different repos), apply the one-beat rule from `~/.claude/CLAUDE.md
+§ "Multi-part answers — one beat per turn"` — open with the count,
+deliver the most urgent piece, offer the rest if asked.
 
 ## What this skill does NOT do
 

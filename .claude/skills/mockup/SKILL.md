@@ -103,7 +103,20 @@ git push -u origin mockup/<feature-name>
 gh pr create --title "Mockup: <feature-name>" --body "UI mockup for <feature-name>. Review the screenshots below."
 ```
 
-Then present the PR link and screenshot paths to the user for visual go/no-go:
+**Final chat reply: one line, no recap.** The HTML, screenshots, and PR
+description ARE the description — don't re-narrate what the mockup looks
+like, what design choices were made, or which tokens were used. Pattern:
+
+    shipped mockup-<feature-name> · PR #<N> · album: <telegram-album-link-or-"sent above">
+
+The PR body, the screenshots already sent to telegram in step 4, and the
+HTML file on disk carry the full artifact. The user reviews via the PR
+and replies "approve" or describes changes — no prompt template needed.
+
+The structured multi-line block (PR URL + each PNG path + "Does this
+look right?" prompt) is **opt-in only** — emit it only if the user asks
+for "the full paths" or "expand". Don't lead with it. For reference,
+the opt-in shape:
 
 ```
 Mockup generated, committed, and PR created:
@@ -117,6 +130,7 @@ Does this look right? Approve to proceed to implementation, or describe changes 
 ```
 
 ## Notes
+- Default final reply is one line. Multi-line PR-and-paths block is opt-in only.
 - This skill is BLOCKING for visual UI changes — do not proceed to test-creator or feature-creator until the user approves the mockup.
 - Always auto-commit, auto-PR, and send the PR link. Never prompt about committing or PR creation.
 - Match Tailwind v4 conventions from the frontend codebase where possible.

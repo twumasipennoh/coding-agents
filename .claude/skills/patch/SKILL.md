@@ -57,7 +57,24 @@ Make the change. Keep it minimal — do not refactor, clean up, or improve surro
 **Then:**
 - **doc-updater** — run all applicable doc-sync phases. BLOCKING.
 
-### 5. Report
+### 5. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with outcome
++ gate summary.** Pattern:
+
+    patch: <one-line outcome>. gates: <N/M passed>. <"push?" if green,
+    "blocker: <one-line>" if red>
+
+If multiple gates failed, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent failure, offer the rest
+if asked.
+
+The structured Type/Diagnosis/Change/Gate Results format is **opt-in
+only** — emit it only when the user explicitly asks for "the full
+breakdown", "expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Patch — <summary>
@@ -80,6 +97,7 @@ Final: ✅ GO / ❌ NO-GO
 If NO-GO, list each failing gate with the specific findings that must be resolved.
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - For bug fixes: do NOT write code before fix-advocate diagnosis + user approval.
 - For design tweaks: proceed directly to implementation — no diagnosis gate.
 - If the user explicitly says "skip gates" or "no gates", respect that and only implement.
