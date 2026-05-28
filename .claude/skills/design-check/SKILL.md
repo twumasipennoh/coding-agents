@@ -42,7 +42,24 @@ Standalone design quality audit. Delegates to the `frontend-design-reviewer` age
 ### 7. Motion Safety
 - Search for CSS animations and transitions without `prefers-reduced-motion` media query.
 
-## Output Format
+## Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with verdict +
+top finding.** Pattern:
+
+    design-check: <pass / N issues>. top: <one-line of worst issue>.
+    <"clean" if pass, "fix?" if issues>
+
+If findings span multiple categories, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent piece, offer the rest if
+asked.
+
+The structured per-category breakdown is **opt-in only** — emit it
+only when the user explicitly asks for "the full breakdown",
+"expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Design Audit Results:
@@ -59,6 +76,7 @@ Motion Safety:    pass or X issues
 List details for any issues found.
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - This is a static analysis scan, not a visual regression test.
 - Delegates to the `frontend-design-reviewer` agent for the detailed checklist review.
 - False positives in test files are expected — note them but don't flag as critical.

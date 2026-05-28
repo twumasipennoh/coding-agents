@@ -34,7 +34,24 @@ Read `FEATURE_PROMPTS.md` and identify the next task. Check:
 - Are all prerequisite features marked `✅ COMPLETE`?
 - Are there any unresolved deferred tasks `[-]` that block the next task?
 
-### 6. Report
+### 6. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with verdict
++ top blocker.** Pattern:
+
+    pre-flight: <PROCEED / FIX FIRST>. <"all checks clean" OR
+    "blocker: <one-line>">.
+
+If multiple blockers exist, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent piece, offer the rest if
+asked.
+
+The structured per-check tickbox format is **opt-in only** — emit it
+only when the user explicitly asks for "the full breakdown",
+"expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Pre-Flight Report
@@ -49,6 +66,7 @@ Verdict: ✅ PROCEED / ❌ FIX FIRST — <list of blockers>
 ```
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - This is a gate, not a rubber stamp. Be honest about gaps.
 - Failing tests are always BLOCKING. Other issues are advisory unless they directly block the next task.
 - Adapt environment checks to whichever stack and toolchain this project uses.

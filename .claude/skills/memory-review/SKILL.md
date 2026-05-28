@@ -8,9 +8,22 @@ Delegate to the **memory-curator** agent (`.claude/agents/memory-curator.md`).
 
 ## Steps
 
-1. Run the memory-curator agent with a full analysis
-2. Present the structured report to the user
-3. If promotion candidates exist, suggest running `/memory-promote` for the top candidate
+1. Run the memory-curator agent with a full analysis. The curator returns its full structured report (categorized findings, recommendations, action items) internally — keep it in scope; do NOT dump it in chat yet.
+2. **Default chat reply: 3-bullet top findings + yield.** Summarize the curator's report as the three most load-bearing findings (one bullet each, one line each), then yield with "want the full review?". Pattern:
+
+       memory review:
+       - <top finding 1, one line>
+       - <top finding 2, one line>
+       - <top finding 3, one line>
+       want the full review?
+
+   Pick the three by impact: capacity at risk, the strongest promotion candidate, the freshest staleness/conflict, or whatever the user most needs to act on. If a category is empty (no candidates, no stale entries), skip that bullet — three is a ceiling, not a quota.
+
+3. **If the user says yes / "full review" / "show me" / similar, dump the full curator report verbatim** (categorized findings, recommendations, action items — exactly as the curator returned it). If the user instead picks one finding to drill into, expand just that one and stay quiet on the rest.
+
+4. If promotion candidates exist, suggest running `/memory-promote` for the top candidate — this can ride along with either the 3-bullet summary or the full dump.
+
+The full structured report is **opt-in only** — never lead with it. The curator's work isn't wasted; it's gated behind the ask. This applies to all `--quick` / `--stale` / `--candidates` / `--docs` variants too: summarize first, expand on request.
 
 ## Arguments
 

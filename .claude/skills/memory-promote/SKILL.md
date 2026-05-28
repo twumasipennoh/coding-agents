@@ -32,8 +32,18 @@ Rules for distillation:
 - One line when possible, two lines maximum
 
 ### 5. Write to Target
-- Append the rule to the appropriate section of CLAUDE.md
-- If CLAUDE.md would exceed 200 lines, warn the user and suggest trimming other sections first
+- Compute the diff against the current CLAUDE.md but do NOT dump it in chat by default.
+- **Default confirmation prompt: one line.** Pattern:
+
+      +<X> / -<Y> lines · summary: <one-line of what changes>. apply? (say "show diff" first to review)
+
+  Example:
+
+      +2 / -0 lines · summary: append CDN-first CORS rule under TO-DOs. apply? (say "show diff" first to review)
+
+- If the user replies "show diff" / "show me" / "let me see" / similar, dump the full unified diff THEN re-prompt to apply. The diff content stays available, just gated behind the ask.
+- On "apply" / "yes" / "go" confirmation, append the rule to the appropriate section of CLAUDE.md.
+- If CLAUDE.md would exceed 200 lines, warn the user inline with the one-line summary and suggest trimming other sections first.
 
 ### 6. Clean Up Source
 - Remove the promoted entry from the agent memory file

@@ -28,7 +28,23 @@ For any gate not already passed, run it now:
 - **pattern-enforcer** + **security-reviewer** + **monitoring-spec-validator** in parallel (read-only)
 - **test-runner** sequentially after the above using this project's configured test command
 
-### 4. Report
+### 4. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with N/M
+gates passed + any failures.** Pattern:
+
+    gates: N/M passed. <"clean" OR "fail: <one-line list>">.
+
+If multiple gates failed, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent failure, offer the rest
+if asked.
+
+The structured per-gate tickbox format is **opt-in only** — emit it
+only when the user explicitly asks for "the full breakdown",
+"expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Feature: <Feature Name>
@@ -46,6 +62,7 @@ Final: ✅ COMPLETE / ❌ INCOMPLETE — fix: <list>
 ```
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - Do NOT fix gate failures automatically — report them.
 - If FEATURE_PROMPTS.md does not exist, report that and stop.
 - Adapt the test-runner command to whichever test framework this project uses.

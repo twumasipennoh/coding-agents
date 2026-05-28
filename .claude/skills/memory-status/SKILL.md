@@ -15,7 +15,32 @@ Quick overview of the project's memory health across all memory files.
 - For each file path mentioned in memory entries, verify the file still exists
 - Count stale references
 
-### 4. Report
+### 4. Reply format
+
+**Default chat reply: 1 line, no template, lead with the highest-
+pressure file + overall status.** Pattern:
+
+    Memory: N/200 lines | CLAUDE.md: N lines | [Healthy/Warning/Critical]
+
+If something needs more than one line (e.g. multiple memory files in
+Warning/Critical, or several stale references that need cleanup),
+apply the one-beat rule from `~/.claude/CLAUDE.md § "Multi-part
+answers — one beat per turn"` — open with the count, deliver the most
+urgent piece, offer the rest if asked.
+
+The structured dashboard (per-file line counts, stale reference list,
+recommendations block) is **opt-in only** — emit it only when the
+user explicitly asks for "the full breakdown", "expand", "details",
+or invokes `/memory-status --full`. Don't lead with it.
+
+Thresholds per memory file:
+| Lines | Status |
+|-------|--------|
+| < 120 | Healthy |
+| 120-180 | Warning -- consider `/memory-review` |
+| > 180 | Critical -- run `/memory-review` now |
+
+If asked to expand, use this template:
 
 ```
 Memory Status:
@@ -31,14 +56,8 @@ Memory Status:
   - [actionable suggestion if any threshold exceeded]
 ```
 
-Thresholds per memory file:
-| Lines | Status |
-|-------|--------|
-| < 120 | Healthy |
-| 120-180 | Warning -- consider `/memory-review` |
-| > 180 | Critical -- run `/memory-review` now |
-
 ## Arguments
 
-- `/memory-status` — Full dashboard (default)
-- `/memory-status --brief` — One-line summary: `Memory: N/200 lines | CLAUDE.md: N lines | [status]`
+- `/memory-status` — One-line summary (default).
+- `/memory-status --full` — Full dashboard with per-file breakdown, stale references, and recommendations.
+- `/memory-status --brief` — Alias for default one-line summary.

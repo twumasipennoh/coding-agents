@@ -12,7 +12,26 @@ Read `docs/prompts/FEATURE_PROMPTS.md` and report implementation progress.
    - A feature is **PENDING** if all checkboxes are `[ ]` or there are no checkboxes.
    - A feature is **⚠️ UNMARKED** if all task checkboxes are `[x]` (excluding `[-]` deferred) but the heading does NOT contain `✅ COMPLETE`. This means the feature is done but the heading was never updated.
 4. Count total tasks (`- [x]` and `- [ ]`) across all features.
-5. Present a summary table:
+5. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with current
+feature + tasks remaining + on-track status.** Pattern:
+
+    <feature> task X.Y, <pipeline step>, N/M remaining. <"on track"
+    OR "blocked: <one-line>">.
+
+If multiple features need flagging (e.g. UNMARKED features that need
+headings updated, or several features in flight), apply the one-beat
+rule from `~/.claude/CLAUDE.md § "Multi-part answers — one beat per
+turn"` — open with the count, deliver the most urgent piece, offer
+the rest if asked.
+
+The structured summary table (per-feature progress, UNMARKED list,
+TESTING doc inventory) is **opt-in only** — emit it only when the user
+explicitly asks for "the full breakdown", "expand", or "details".
+Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Feature Progress:
@@ -25,9 +44,11 @@ Feature Progress:
   ⚠️ N features have all tasks done but heading is not marked ✅ COMPLETE
 ```
 
-6. Identify the **next actionable task** (first unchecked `[ ]` item) and display it.
-7. If any features are **⚠️ UNMARKED**, list them and suggest updating their headings with `✅ COMPLETE`.
+Then identify the **next actionable task** (first unchecked `[ ]`
+item) and list any **⚠️ UNMARKED** features with a suggestion to update
+their headings with `✅ COMPLETE`.
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured table format is opt-in only.
 - If `FEATURE_PROMPTS.md` doesn't exist, report that and suggest running `/prd-to-prompts`.
 - Also check for any `TESTING_*.md` files in `docs/prompts/` and list which features have testing docs.

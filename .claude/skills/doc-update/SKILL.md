@@ -42,7 +42,24 @@ Update README.md if the feature changes user-facing behavior, setup steps, or en
 **Phase 7 — Human attention flags**
 List any items that require manual human review: security decisions, architectural trade-offs, deferred tasks, open questions.
 
-### 3. Report
+### 3. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with phases
+done + any skips/blockers.** Pattern:
+
+    docs: phases N/7 done. <"all clean" OR "skipped: <one-line>" OR
+    "blocked: <one-line>">.
+
+If multiple phases were skipped or flagged Phase 7 items need attention,
+apply the one-beat rule from `~/.claude/CLAUDE.md § "Multi-part answers
+— one beat per turn"` — open with the count, deliver the most urgent
+piece, offer the rest if asked.
+
+The structured per-phase tickbox format is **opt-in only** — emit it
+only when the user explicitly asks for "the full breakdown", "expand",
+or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Doc Update — <Feature Name>
@@ -59,5 +76,6 @@ All 7 phases complete.
 ```
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - All phases must run — do not skip any without a stated reason.
 - Phase 7 items must be explicitly listed, not just counted.

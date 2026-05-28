@@ -29,7 +29,23 @@ Scan the current session's pipeline audit logs for unmatched `start` events. Thi
 
 Add the result row to the gate results table: `pipeline-audit: ✅ PASS / ⚠️ WARN / ❌ FAIL / ⏭️ SKIPPED`.
 
-### 4. Report results
+### 4. Reply format
+
+**Default chat reply: 1-3 sentences, no template, lead with N/M
+gates passed + any failures.** Pattern:
+
+    gates: N/M passed. <"clean" OR "fail: <one-line list>">.
+
+If multiple gates failed, apply the one-beat rule from
+`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
+open with the count, deliver the most urgent failure, offer the rest
+if asked.
+
+The structured per-gate tickbox format is **opt-in only** — emit it
+only when the user explicitly asks for "the full breakdown",
+"expand", or "details". Don't lead with it.
+
+If asked to expand, use this template:
 
 ```
 Gate Results:
@@ -45,6 +61,7 @@ Final: ✅ GO / ❌ NO-GO
 If NO-GO, list each failing gate with the specific findings that must be resolved.
 
 ## Notes
+- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - Do NOT fix issues automatically — report them and wait for user direction.
 - FAIL on any gate = NO-GO. WARN is informational only and does not block.
 - Adapt the test-runner command to whichever test framework this project uses.
