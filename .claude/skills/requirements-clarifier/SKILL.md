@@ -8,6 +8,21 @@ Run the **requirements-clarifier** agent before any feature or bug fix. Walks th
 
 Before each phase, read `<project_root>/.claude/clarifier-context.md` if it exists. This sidecar lists the project's stack (backend/frontend frameworks, test frameworks, design system) and any clarifier-specific guidance. Weave its notes into your phase prompts where relevant — e.g., "consider testability across the project's pytest + Vitest + Playwright stack" or "evaluate impact on the Tailwind v4 design tokens." If the file is missing, proceed with universal phrasing — no error, no block.
 
+## Conversational pacing — ONE QUESTION PER TURN
+
+Each phase below lists multiple sub-sections of questions. Do NOT ask all of them in a single message — that produces a wall of text that's hard to read on small screens (telegram) and slow to answer. Pacing rule:
+
+1. Within each phase, identify the single most load-bearing question — the one whose answer most constrains the rest.
+2. Ask that one question. Keep the message short — 1-3 sentences of context, then the question. Don't preview the other questions that are coming.
+3. Wait for the user's answer.
+4. Use the answer to pick the next question — some may now be irrelevant, others clearer.
+5. Continue until you have enough substance to emit the phase's GATE message.
+6. The GATE message is the only "deliverable" turn for the phase. It carries the findings + the gate prompt, per the ordering rule above.
+
+This overrides any later instruction in this file that lists multiple questions to ask "in" a phase — those lists are the menu, not the script. You're picking from the menu one item at a time, not reading the menu aloud.
+
+**Escape hatch:** if the user says "batch them," "give me all the questions," "ask them all at once," or "I'll answer them in one go," dump the full phase's questions in a single message for that phase. Default is one-at-a-time.
+
 ## Usage
 
 ```
