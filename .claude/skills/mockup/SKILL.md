@@ -2,7 +2,7 @@
 
 > **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `mockup`, display name `Mockup`. Call `begin mockup "Mockup" --total 6` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end mockup --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
 
-Run the **mockup-designer** agent to generate a standalone HTML mockup with Tailwind CSS, then capture screenshots at mobile and desktop widths.
+Run the **mockup-designer** agent to generate a standalone HTML mockup with Tailwind CSS v4, then capture screenshots at mobile and desktop widths.
 
 ## Usage
 
@@ -20,16 +20,17 @@ If the user asks for multiple variants, options, versions, or alternatives ("3 t
 
 - **HTML step:** `mockup-designer` writes `docs/mockups/<feature>-variant-{a,b,c,…}.html` (one file per variant, lowercase letters in order). See the agent's "Variants Mode" section for content requirements.
 - **Lint step (if this skill defines one):** Run `lint-mockup.sh` **once per variant file**. Any blocking failure in any variant blocks the whole batch.
-- **Screenshot step:** Run `generate-mockup.js` once per variant HTML. Produces `<feature>-variant-{a,b,c}-{iphone12,iphone14pro,desktop}.png` (N × 3 PNGs total).
-- **Telegram step:** Send THREE albums instead of one — one per viewport — so each form factor tiles cleanly:
+- **Screenshot step:** Run `generate-mockup.js` once per variant HTML. Produces `<feature>-variant-{a,b,c}-{iphone12,iphone14pro,desktop}.png` (N × 3 PNGs total). When a viewport's rendered page exceeds Telegram's 20:1 photo-aspect cap, the tool auto-slices into `<feature>-variant-{letter}-{viewport}-part-{N}.png` chunks so each chunk fits the cap and album sends succeed.
+- **Telegram step:** Send THREE albums instead of one — one per viewport — so each form factor tiles cleanly. The globs use `*` after the viewport name so they catch any auto-sliced `-part-N.png` chunks the screenshot tool produced:
   ```bash
   ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — iPhone 12" \
-    docs/mockups/<feature>-variant-*-iphone12.png
+    docs/mockups/<feature>-variant-*-iphone12*.png
   ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — iPhone 14 Pro" \
-    docs/mockups/<feature>-variant-*-iphone14pro.png
+    docs/mockups/<feature>-variant-*-iphone14pro*.png
   ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — desktop" \
-    docs/mockups/<feature>-variant-*-desktop.png
+    docs/mockups/<feature>-variant-*-desktop*.png
   ```
+  If any album send still gets rejected, `telegram-send-media.sh` auto-falls-back to per-file sends so each photo retries via the `sendPhoto → sendDocument` chain.
 - **Commit/PR step:** `git add docs/mockups/<feature>-variant-*.{html,png}` catches all N HTMLs and 3N PNGs. Branch: `mockup/<feature>-variants`. Commit: `docs: add <feature> UI mockup variants`.
 
 Single-mockup mode (one design, no variants) is unchanged — keep the existing single-file flow.
@@ -39,8 +40,9 @@ Single-mockup mode (one design, no variants) is unchanged — keep the existing 
 ### 1. Run mockup-designer agent
 
 Invoke the **mockup-designer** agent with the feature/screen name. The agent will:
-- Review the relevant feature spec or PRD section
-- Design the screen UI
+- Review the relevant feature spec in `FEATURE_PROMPTS.md`
+- Review any PRD sections relevant to the screen
+- Design a mobile-first UI consistent with the project's React/TS + Tailwind v4 design language
 
 ### 1b. Apply the frontend-design aesthetic skill
 
@@ -59,6 +61,7 @@ Requirements:
 - Load Tailwind CSS via CDN (`<script src="https://cdn.tailwindcss.com"></script>`)
 - **Responsive desktop layout required** — see the **mockup-designer** agent's "Responsive Layout Requirements (REQUIRED)" section. Mobile-first base, with Tailwind `md:` / `lg:` reflows so the desktop screenshot (1280px) shows a true desktop layout (sidebar nav, multi-column grids, wider cards) — not the mobile DOM centered on a wide canvas.
 - No external images — use placeholder divs with `bg-gray-200` or similar
+- Match the Tailwind v4 design conventions used in the frontend
 - Include `<meta name="viewport" content="width=device-width, initial-scale=1">` for correct mobile rendering
 - Must be fully self-contained (no separate CSS or JS files)
 
@@ -73,6 +76,8 @@ This captures three viewports (per `~/projects/generate-mockup.js`):
 - **iPhone 12** at 390px → `docs/mockups/<feature-name>-iphone12.png`
 - **iPhone 14 Pro** at 393px → `docs/mockups/<feature-name>-iphone14pro.png`
 - **Desktop** at 1280px → `docs/mockups/<feature-name>-desktop.png`
+
+If a viewport's rendered page is too tall for Telegram's 20:1 photo-aspect cap (common when a mockup stacks many screens vertically), the tool slices the capture into `<feature-name>-{viewport}-part-{N}.png` chunks. Use a `-{viewport}*.png` glob (not `-{viewport}.png`) when sending to telegram to catch the chunks.
 
 ### 4. Send screenshots to telegram (auto-suppressed in IDE sessions)
 
@@ -112,6 +117,7 @@ Does this look right? Approve to proceed to implementation, or describe changes 
 ```
 
 ## Notes
-- This skill is BLOCKING for visual UI changes — do not proceed to implementation until the user approves.
+- This skill is BLOCKING for visual UI changes — do not proceed to test-creator or feature-creator until the user approves the mockup.
 - Always auto-commit, auto-PR, and send the PR link. Never prompt about committing or PR creation.
+- Match Tailwind v4 conventions from the frontend codebase where possible.
 - If the screenshot tool fails, note the error and ask the user to open the HTML file in a browser.
