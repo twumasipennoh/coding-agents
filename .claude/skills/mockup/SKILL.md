@@ -21,16 +21,16 @@ If the user asks for multiple variants, options, versions, or alternatives ("3 t
 - **HTML step:** `mockup-designer` writes `docs/mockups/<feature>-variant-{a,b,c,…}.html` (one file per variant, lowercase letters in order). See the agent's "Variants Mode" section for content requirements.
 - **Lint step (if this skill defines one):** Run `lint-mockup.sh` **once per variant file**. Any blocking failure in any variant blocks the whole batch.
 - **Screenshot step:** Run `generate-mockup.js` once per variant HTML. Produces `<feature>-variant-{a,b,c}-{iphone12,iphone14pro,desktop}.png` (N × 3 PNGs total). When a viewport's rendered page exceeds Telegram's 20:1 photo-aspect cap, the tool auto-slices into `<feature>-variant-{letter}-{viewport}-part-{N}.png` chunks so each chunk fits the cap and album sends succeed.
-- **Telegram step:** Send THREE albums instead of one — one per viewport — so each form factor tiles cleanly. The globs use `*` after the viewport name so they catch any auto-sliced `-part-N.png` chunks the screenshot tool produced:
+- **Telegram step:** Send THREE albums instead of one — one per viewport — so each form factor tiles cleanly. **Pass `-d`** so each PNG is uploaded via `sendDocument` (preserves the original bytes — `sendPhoto` would JPEG-re-encode and downscale to ~1280px wide, blurring the dense text and chrome in mockup screenshots). The globs use `*` after the viewport name so they catch any auto-sliced `-part-N.png` chunks the screenshot tool produced:
   ```bash
-  ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — iPhone 12" \
+  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants — iPhone 12" \
     docs/mockups/<feature>-variant-*-iphone12*.png
-  ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — iPhone 14 Pro" \
+  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants — iPhone 14 Pro" \
     docs/mockups/<feature>-variant-*-iphone14pro*.png
-  ~/.claude/scripts/telegram-send-media.sh -m "<feature> variants — desktop" \
+  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants — desktop" \
     docs/mockups/<feature>-variant-*-desktop*.png
   ```
-  If any album send still gets rejected, `telegram-send-media.sh` auto-falls-back to per-file sends so each photo retries via the `sendPhoto → sendDocument` chain.
+  If any album send still gets rejected, `telegram-send-media.sh` auto-falls-back to per-file sends so each file retries through `sendDocument` directly.
 - **Commit/PR step:** `git add docs/mockups/<feature>-variant-*.{html,png}` catches all N HTMLs and 3N PNGs. Branch: `mockup/<feature>-variants`. Commit: `docs: add <feature> UI mockup variants`.
 
 Single-mockup mode (one design, no variants) is unchanged — keep the existing single-file flow.
@@ -81,10 +81,10 @@ If a viewport's rendered page is too tall for Telegram's 20:1 photo-aspect cap (
 
 ### 4. Send screenshots to telegram (auto-suppressed in IDE sessions)
 
-After screenshots are captured, ship them to the bound telegram chat as an album so they're previewable inline without leaving the conversation:
+After screenshots are captured, ship them to the bound telegram chat as a document album so they're previewable inline without leaving the conversation. Pass `-d` so files upload via `sendDocument` — `sendPhoto` would JPEG-re-encode and downscale to ~1280px wide, blurring the dense text and chrome in mockup screenshots:
 
 ```bash
-~/.claude/scripts/telegram-send-media.sh \
+~/.claude/scripts/telegram-send-media.sh -d \
   -m "<feature-name> mockup" \
   docs/mockups/<feature-name>-*.png
 ```
@@ -113,14 +113,14 @@ The PR body, the screenshots already sent to telegram in step 4, and the
 HTML file on disk carry the full artifact. The user reviews via the PR
 and replies "approve" or describes changes — no prompt template needed.
 
-The structured multi-line block (PR URL + each PNG path + "Does this
-look right?" prompt) is **opt-in only** — emit it only if the user asks
-for "the full paths" or "expand". Don't lead with it. For reference,
-the opt-in shape:
+If asked to expand: the structured multi-line block (PR URL + each PNG
+path + "Does this look right?" prompt) is **opt-in only** — emit it only
+if the user asks for "the full paths" or "expand". Don't lead with it.
+For reference, the opt-in shape:
 
 ```
 Mockup generated, committed, and PR created:
-  PR:      <pr-url>
+  PR:        <pr-url>
   HTML:      docs/mockups/<feature-name>.html
   iPhone 12: docs/mockups/<feature-name>-iphone12.png
   iPhone 14: docs/mockups/<feature-name>-iphone14pro.png
@@ -130,7 +130,6 @@ Does this look right? Approve to proceed to implementation, or describe changes 
 ```
 
 ## Notes
-- Default final reply is one line. Multi-line PR-and-paths block is opt-in only.
 - This skill is BLOCKING for visual UI changes — do not proceed to test-creator or feature-creator until the user approves the mockup.
 - Always auto-commit, auto-PR, and send the PR link. Never prompt about committing or PR creation.
 - Match Tailwind v4 conventions from the frontend codebase where possible.
