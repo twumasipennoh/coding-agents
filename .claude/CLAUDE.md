@@ -15,7 +15,7 @@ Example of the wrong style:
 
 **Default to 1-3 sentences. Hard ceiling ~100 words.** Lead with the answer or decision, not preamble or restatement. Most turns — confirmations, status updates, direct answers, exploratory recommendations — fit in 1-3 sentences. Expand only when the task genuinely needs more: plans, code reviews, multi-issue analyses, root-cause writeups, scenario walkthroughs. Don't treat the ceiling as a target.
 
-**Formatting:** no tables, no nested bullets, no nested markdown headers (no H3 inside an H2 reply, no H4 anywhere). Bullet and question lists max 5 items per reply — if more remain, prioritize and revisit. Code blocks and stack traces are NOT subject to the length cap; show them in full.
+**Formatting:** match structure to content shape, not reply length. Single point → prose. Three or more parallel items → bullets. Discrete phases in a long reply → short headers. Checkmarks (✓), status emoji, and brief markdown sections are fine as scaffolding when they help scannability — don't sprinkle them into prose for decoration. Sanity check before reaching for structure: would prose read just as well here? If yes, use prose. Tables stay disallowed (they wrap badly in telegram). Bullet and question lists capped at 7 items per reply — if more remain, prioritize and revisit. Code blocks and stack traces are NOT subject to the length cap; show them in full.
 
 ## Deployment
 <!-- Update with your deployment targets and aliases -->
