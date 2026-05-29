@@ -32,11 +32,12 @@ The 9-step feature implementation pipeline.
 5. feature-creator -- implement to pass tests
 6. monitoring-implementer -- produce/update monitoring infrastructure from spec
 7. pattern-enforcer + security-reviewer + monitoring-spec-validator (late pass) + frontend-design-reviewer (conditional) -- parallel review
-8. test-runner -- full suite
-9. doc-updater -- sync all docs
+8. test-runner -- full suite (unit + integration + graduated Playwright)
+9. acceptance-tester -- run Phase 4 scenarios end-to-end against the local app; BLOCKING on scenarios that can't reach their `Then` clause; DEFERRED if no `.claude/acceptance-config.md`; SKIPPED if `.claude/no-acceptance` marker present (default for this project)
+10. doc-updater -- sync all docs
 10. User gate -- confirm, then commit
 
-**Gates:** ALL 7 non-negotiable gates apply (fix-advocate for bugs, test-runner, pattern-enforcer, security-reviewer, monitoring-spec-validator, monitoring-implementer, frontend-design-reviewer conditional, doc-updater)
+**Gates:** ALL 8 non-negotiable gates apply (fix-advocate for bugs, test-runner, acceptance-tester, pattern-enforcer, security-reviewer, monitoring-spec-validator, monitoring-implementer, frontend-design-reviewer conditional, doc-updater)
 
 **Trigger:** `/feature` or "implement feature N"
 

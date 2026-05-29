@@ -50,6 +50,7 @@ Make the change. Keep it minimal — do not refactor, clean up, or improve surro
 
 **Then sequentially:**
 - **test-runner** — run the project's full test suite
+- **acceptance-tester** — re-runs the Phase 4 scenarios that touch the patched code. **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
 
 **Conditional:**
 - **frontend-design-reviewer** — only if changed files touch frontend/UI code. BLOCKING on CRITICAL findings only.

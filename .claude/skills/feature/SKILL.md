@@ -41,6 +41,9 @@ If either reports issues, fix them before proceeding.
 ### Step 5 — Test Suite
 Run the **test-runner** agent -> full suite across all layers. Must be all green before proceeding.
 
+### Step 5b — Acceptance Test
+Run the **acceptance-tester** agent to execute Phase 4 scenarios end-to-end. **BLOCKING** if any scenario can't reach its `Then` clause. If `.claude/acceptance-config.md` is missing AND no `.claude/no-acceptance` marker is present, the agent reports `DEFERRED` — the pipeline continues but a one-line notice is logged for follow-up. If `.claude/no-acceptance` is present (the project's current state), the agent reports `SKIPPED` and the pipeline continues. See `~/.claude/agents/acceptance-tester.md` for the contract.
+
 ### Step 6 — Doc Sync
 Run the **doc-updater** agent -> performs all 7 phases:
 1. Writes `TESTING_<FEATURE_NAME>.md` in `docs/prompts/`
@@ -77,6 +80,7 @@ Do not mark a task complete until:
 - [ ] Pre-flight passed (no blockers)
 - [ ] All tests green (full suite)
 - [ ] E2E coverage gate passed (test-runner confirmed E2E tests ran OR justified skip)
+- [ ] Acceptance test passed (every Phase 4 scenario reached its `Then` clause, OR DEFERRED with missing-sidecar notice, OR SKIPPED via `.claude/no-acceptance`)
 - [ ] Pattern review clean
 - [ ] Security review clean
 - [ ] TESTING_<FEATURE_NAME>.md exists

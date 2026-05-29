@@ -15,6 +15,9 @@ Run these three agents simultaneously (all read-only):
 ### 2. Run test suite
 After the parallel review gates complete, run the **test-runner** agent with the project's test command (check package.json or Makefile for the test runner configured for this project).
 
+### 2b. Run acceptance-tester
+After test-runner, run the **acceptance-tester** agent against the Phase 4 scenarios. **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
+
 ### 3. Pipeline audit (step-announcement pairing check)
 
 Scan the current session's pipeline audit logs for unmatched `start` events. This enforces the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"` — every announced `start` must have a matching `done`, `fail`, or `skip`. Unmatched events indicate the pipeline ran but a step didn't report its outcome.
