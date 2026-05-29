@@ -84,13 +84,15 @@ Run these in order. If any fail, call `pipeline-step.sh fail deploy "Pre-Deploy 
 1. **Firebase CLI check:** Run `npx firebase-tools@latest --version` to verify firebase tools are available.
 2. **Auth check:** Run `npx firebase-tools@latest projects:list --json 2>/dev/null | head -5` to verify authentication. If this fails, report the auth issue and stop.
 3. **Run tests:** Execute each command in `deploy.json.testCommands` sequentially. If any test command fails, stop.
-4. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
-5. **Env file verification:** If `deploy.json.envFiles` is set for this target, verify those files exist and spot-check that they reference the correct project ID (grep for the project ID in the env file).
+4. **Run acceptance-tester (final gate before shipping):** Invoke the **acceptance-tester** agent. **BLOCKING** if any Phase 4 scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent (note logged; deploy continues — features whose Phase 4 was passed locally during `/feature` remain trusted). Reports `SKIPPED` if the opt-out marker is present. Set `acceptance_required: true` in `deploy.json` to upgrade `DEFERRED` to `FAIL` for high-stakes targets like prod.
+5. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
+6. **Env file verification:** If `deploy.json.envFiles` is set for this target, verify those files exist and spot-check that they reference the correct project ID (grep for the project ID in the env file).
 
 **`kind: "local-script"`:**
 
 1. **Run tests:** Execute each command in `deploy.json.testCommands` sequentially. **BLOCKING** — broken tests = no deploy. (Skip this step ONLY if `testCommands` is an empty array, signalling the project has no test gate by design.)
-2. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
+2. **Run acceptance-tester (final gate before shipping):** Same contract as the firebase block above.
+3. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
 
 On success: `pipeline-step.sh done deploy "Pre-Deploy Checks" --note "tests + build verified"`.
 

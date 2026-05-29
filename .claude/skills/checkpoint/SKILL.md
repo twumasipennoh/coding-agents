@@ -12,6 +12,8 @@ Run after completing a feature to validate everything before moving on. Incorpor
    - All test layers
    - Report pass/fail counts
 
+1b. **Run acceptance-tester agent**: Re-runs the Phase 4 scenarios for the just-completed feature against the live app. **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
+
 2. **Check completed feature docs**: For the most recently completed feature, verify:
    - Domain types
    - UI components (if applicable)
