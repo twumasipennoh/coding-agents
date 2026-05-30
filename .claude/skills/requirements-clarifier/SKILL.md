@@ -30,6 +30,21 @@ This overrides any later instruction in this file that lists multiple questions 
 
 **Escape hatch:** if the user says "batch them," "give me all the questions," "ask them all at once," or "I'll answer them in one go," dump the full phase's questions in a single message for that phase. Default is one-at-a-time.
 
+## Output pacing — MULTI-PART DELIVERABLES (Phases 1b, 2, 3, 4, 5)
+
+The pacing rule above keeps Phase 1 (Q&A-shaped) from becoming a wall of questions. The output-shaped phases — 1b prior-art options, Phase 2 brainstormed approaches, Phase 3 evaluation findings, Phase 4 test scenarios, Phase 5 plan — have the opposite failure mode: a wall of findings/options/scenarios dumped in one turn. Apply the "Multi-part answers — one beat per turn" rule from `~/.claude/CLAUDE.md`:
+
+1. When the phase's deliverable has 3+ distinct parts (3+ surveyed options, 3 approaches, 4+ evaluation findings, 5+ test scenarios, plan with 3+ phases), open with the count + bypass: "3 approaches, going one at a time — say 'all at once' to skip."
+2. Deliver the most load-bearing part first — the one that most constrains the user's next decision. For 1b: the option you'd recommend. For Phase 2: the approach you'd lean toward. For Phase 3: the worst finding (the one that might force a Phase 2 bounce-back). For Phase 4: the riskiest scenario. For Phase 5: the user-facing change.
+3. Flow into the next part as the conversation continues — don't ask "want the next one?" after each. Trust the user to interrupt, drill into a specific part, or jump to the gate.
+4. The phase's GATE prompt lands at the end of the LAST part, not bundled with part 1. The chunked parts collectively are the deliverable; the GATE is the closing turn.
+
+**Skip the chunking** for 1-2 part deliverables: a Phase 2 with only one viable approach, a Phase 5 plan that's two paragraphs, a Phase 3 with one finding. The chunking is friction; only apply it when the deliverable is genuinely long.
+
+**Escape hatch:** same as ONE QUESTION PER TURN — "all at once," "batch them," "just dump it," "show me everything" → emit the full deliverable in a single closing turn (findings + GATE prompt together, original format).
+
+**Don't double-pace.** Phase 1 already paces *questions*; don't also chunk Phase 1's GATE message — that's a single summary turn by design.
+
 ## Usage
 
 ```
