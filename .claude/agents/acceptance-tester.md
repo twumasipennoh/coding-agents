@@ -16,15 +16,16 @@ Read `<cwd>/.claude/acceptance-config.md`.
 
   Exit 0. Do not block the pipeline.
 
-- **If neither sidecar nor opt-out marker exists:** stop with:
+- **If neither sidecar nor opt-out marker exists:** auto-scaffold the sidecar using the same detection logic as `/setup-acceptance` (detect stack from `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod`; write `.claude/acceptance-config.md` with pre-filled values and `TODO:` markers on stack-specific fields; create `tests/acceptance/scenarios/.gitkeep` and `tests/acceptance/ephemeral/.gitkeep`). Then **BLOCK** with:
 
   ```
-  Acceptance Test Run: DEFERRED — no sidecar found.
-  Expected: <cwd>/.claude/acceptance-config.md OR <cwd>/.claude/no-acceptance
-  Run /setup-acceptance to scaffold the sidecar, or drop an empty .claude/no-acceptance file to opt out.
+  Acceptance Test Run: BLOCKED — no sidecar found. Auto-scaffolded .claude/acceptance-config.md.
+  Fill in the TODO: markers (auth_strategy, runner_command, Pre-Run Setup.start, Post-Run Cleanup.command),
+  write at least one scenario in tests/acceptance/scenarios/, then re-run /feature.
+  To opt out instead: touch .claude/no-acceptance
   ```
 
-  Exit 0. Do not block the pipeline. Log a one-line "acceptance-tester DEFERRED" notice for follow-up.
+  Exit non-zero. Block the pipeline.
 
 - **If sidecar present:** parse the schema below.
 
@@ -72,8 +73,12 @@ A markdown file with H2 sections. Required sections marked **(required)**.
 - `runner_command`: shell command that runs all files in the ephemeral dir
 
 ## Scenario Source (required)
-- `file`: path to the file containing Phase 4 scenarios (e.g., `docs/prompts/FEATURE_PROMPTS.md`)
-- `section_pattern`: regex or literal heading marking the Phase 4 block (e.g., `^## Phase 4 Scenarios$`)
+- `kind`: `file` (default) | `directory`.
+  - `file` — reads a single file and extracts scenarios from the section matching `section_pattern`. Legacy; prefer `directory` for new projects.
+  - `directory` — scans all `*.md` files in the given path for Given/When/Then blocks. One file per feature. Preferred for new projects; test-creator writes here automatically when scenarios are missing.
+- `file`: path to the scenario file (required when `kind: file`; e.g., `docs/prompts/FEATURE_PROMPTS.md`)
+- `section_pattern`: regex or literal heading marking the scenarios block (required when `kind: file`; e.g., `^## Phase 4 Scenarios$`)
+- `directory`: path to the scenarios directory (required when `kind: directory`; e.g., `tests/acceptance/scenarios/`)
 
 ## Limits (required)
 - `max_parallel`: maximum concurrent scenarios (integer, recommended 2-5)
@@ -102,7 +107,17 @@ For each pre-run dependency, the cleanup command. Always runs on success AND fai
 
 1. **Load sidecar.** Apply the BLOCKING / DEFERRED / SKIPPED rules from Step 1.
 2. **Bootstrap registry if absent.** If `<cwd>/.claude/scenario-registry.yaml` does not exist, create it empty: `scenarios: []`. Log `registry initialized`.
-3. **Read scenarios.** Open `## Scenario Source.file`, find the section matching `section_pattern`, extract one scenario per Given/When/Then block. Assign each scenario a stable id derived from its slugified title (e.g., `save-to-watchlist-duplicate`).
+3. **Read scenarios.**
+   - If `kind: file` (or `kind` omitted): open `Scenario Source.file`, find the section matching `section_pattern`, extract one scenario per Given/When/Then block.
+   - If `kind: directory`: scan all `*.md` files in `Scenario Source.directory`, extract all Given/When/Then blocks across all files.
+   - Assign each scenario a stable id derived from its slugified title (e.g., `save-to-watchlist-duplicate`).
+   - **If zero scenarios were extracted** (section missing, directory absent or empty, no Given/When/Then blocks found): BLOCK with:
+     ```
+     Acceptance Test Run: BLOCKED — no acceptance scenarios found.
+     Source: <Scenario Source.file or Scenario Source.directory>
+     Write at least one Given/When/Then scenario before running /feature, or opt out with .claude/no-acceptance.
+     ```
+     Exit non-zero. Do not continue.
 4. **Filter against registry.** For each scenario:
    - `status: graduated` → skip (log "scenario X graduated — running N/M instead")
    - `status: demoted` → include and prefix the report with "(demoted from Playwright — re-investigate)"
