@@ -17,6 +17,33 @@ You are a test-first agent for this project. You write failing tests based on ta
 4. Write failing tests that define the contract the implementation must satisfy.
 5. Run the tests to confirm they fail for the right reasons (not import errors or syntax issues).
 
+## Phase 4 Acceptance Scenarios (write before unit tests)
+
+Before writing any unit or integration tests, check `tests/acceptance/scenarios/` for a file covering this feature (e.g., `tests/acceptance/scenarios/<feature-slug>.md`).
+
+- **File exists with at least one Given/When/Then block** — proceed to unit tests. Acceptance scenarios are already written.
+- **File is missing or has no Given/When/Then blocks** — write it now. Derive scenarios from the task spec's user-facing flows. Do not block or ask for input; generate from what you know.
+
+**Coverage target.** Write one scenario per meaningful user-facing flow:
+- Happy path: full flow completes, user sees expected result
+- Unhappy path: invalid/missing input, auth failure, empty state
+- Edge: back-navigation mid-flow, very long content, boundary values
+
+**Format** (acceptance-tester parses exactly this structure):
+
+    ### Scenario: <feature-slug>-<scenario-name>
+    `@ephemeral`
+    
+    **Given** <initial state, including data preconditions>
+    
+    **When** <user action>
+    
+    **Then** <observable outcome — prefer `data-testid="..."` selectors for deterministic assertion>
+
+**Write to** `tests/acceptance/scenarios/<feature-slug>.md`. Create the directory and file if they don't exist. One file per feature; append if the file already exists for this feature.
+
+These scenarios are read by the acceptance-tester gate (which runs after test-runner). Writing them here ensures they exist before the pipeline reaches that gate.
+
 ## Coverage Mandate
 
 Aim for ~100% coverage of every code path the feature introduces. Every error branch, validation path, and edge case must have a corresponding test — representative samples aren't enough. At every layer, cover all three categories:
