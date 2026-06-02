@@ -144,11 +144,29 @@ If a testability finding materially undermines the chosen approach (e.g., the ar
 **GATE: Pause after this phase and wait for user confirmation before proceeding.**
 
 ### Phase 4 — Test Strategy
-Define use cases to verify the implementation as Given/When/Then scenarios. Build on Phase 3's testability findings — the layers, seams, and approximations identified there determine what gets covered here. Cover:
-- Happy path
-- Edge cases identified in Phase 1
-- Error/recovery scenarios
-- Test coverage across all relevant layers (including the manual QA steps for any e2e-unreachable seams surfaced in Phase 3)
+Define use cases to verify the implementation as Given/When/Then scenarios. Build on Phase 3's testability findings — the layers, seams, and approximations identified there determine what gets covered here.
+
+**Coverage mandate — ~100% of implementation paths.** Every code path the feature introduces must be exercised by at least one test. The goal is exhaustive coverage, not a representative sample. For each reachable layer, cover all three categories — never leave any of them empty:
+
+- **Happy path** — the feature works as intended with valid inputs and satisfied preconditions.
+- **Unhappy path** — invalid inputs, missing required fields, external service errors (4xx/5xx), auth failures, rate limit responses, DB write failures, permission denied. Cover every error branch the implementation will handle.
+- **Edge cases** — boundary values (empty, single-item, max-length, zero/negative), concurrent operations, idempotent retries, out-of-order events, null/undefined coercion, large payloads, all enum/variant branches, session expiry mid-flow.
+
+**Per-layer structure.** Produce a separate block of GWT scenarios for each reachable layer (per Phase 3), covering all three categories in each block:
+
+- **Unit** — pure logic, model validation, utility helpers. Unhappy = bad input, out-of-range, type coercion surprises. Edge = boundary values, empty inputs, all enum branches.
+- **Integration** — cross-component behavior, repo/DB layer, mocked external services. Unhappy = service returns 4xx/5xx, DB write fails, timeout, auth token rejected. Edge = idempotency (same call twice), partial data, concurrent writes.
+- **E2E / Acceptance** — full user-facing flow. Unhappy = form with missing/invalid fields, session expired mid-flow, network error, permission denied. Edge = very long content, back-navigation mid-flow, deep links into protected pages, concurrent sessions.
+
+**Scenario format.** Use Given/When/Then for every scenario, tagged with its layer:
+
+```
+[Unit] Given a createUser function and an email without @
+When called
+Then it throws ValidationError("invalid email")
+```
+
+For any e2e-unreachable seam identified in Phase 3, include explicit manual QA steps as a checklist — never stay silent.
 
 **GATE: Pause after this phase and wait for user sign-off before proceeding.**
 
