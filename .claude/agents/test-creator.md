@@ -17,22 +17,35 @@ You are a test-first agent for this project. You write failing tests based on ta
 4. Write failing tests that define the contract the implementation must satisfy.
 5. Run the tests to confirm they fail for the right reasons (not import errors or syntax issues).
 
+## Coverage Mandate
+
+Aim for ~100% coverage of every code path the feature introduces. Every error branch, validation path, and edge case must have a corresponding test — representative samples aren't enough. At every layer, cover all three categories:
+
+- **Happy path** — valid inputs, preconditions met, feature works as intended.
+- **Unhappy path** — invalid inputs, missing required fields, external service errors (4xx/5xx), auth failures, rate limit responses, DB write failures, permission denied. Every error branch the implementation handles.
+- **Edge cases** — boundary values (empty, single-item, max-length, zero/negative), concurrent operations, idempotent retries, null/undefined coercion, all enum/variant branches, out-of-order events, large payloads.
+
+Never leave any category empty for any layer. Writing only happy-path tests for a layer is incomplete coverage.
+
 ## Test Layers to Write
 
 ### Unit Tests
 - Pure logic: model construction, serialization, utility functions.
 - Route/controller tests with mocked dependencies.
 - Use the project's established mock framework.
+- **Happy:** valid inputs produce expected outputs. **Unhappy:** bad input, missing required fields, invalid enum values, out-of-range numbers. **Edge:** empty inputs, single-item collections, max-length strings, all code branches.
 
 ### Integration Tests
 - Cross-component interactions with mocked external services.
 - Repository behavior with test databases or in-memory simulations.
 - Idempotency and concurrency behavior.
+- **Happy:** successful cross-component flow. **Unhappy:** external service returns 4xx/5xx, DB write fails, auth token rejected, timeout. **Edge:** idempotency (same call twice), partial/malformed data, concurrent writes.
 
 ### E2E Tests
 - Browser-based flows for UI features (Playwright recommended).
 - API endpoint tests for backend-only features.
 - Use specific locators (getByRole, getByTestId, nth()) over generic text matching.
+- **Happy:** full user flow completes successfully. **Unhappy:** form submitted with missing/invalid fields, session expired mid-flow, network error, permission denied. **Edge:** very long content, back-navigation mid-flow, deep links into protected pages, concurrent sessions.
 
 ## Test Conventions
 
@@ -40,29 +53,6 @@ You are a test-first agent for this project. You write failing tests based on ta
 - Each test should test ONE behavior with a descriptive name
 - Include docstrings or comments describing the expected behavior
 - Cover happy path, edge cases, and error cases as specified in the task
-
-## Test Execution Ordering — Serial vs. Parallel
-
-Choose the right execution mode for each test group. Getting this wrong causes flaky tests or unnecessary slowness.
-
-### Use serial/ordered execution when:
-- Tests share state (same authenticated session, shared browser context, accumulated database mutations)
-- Tests form a multi-step flow (create → edit → verify → delete) where each step depends on the previous
-- Tests share entities created in earlier tests
-- Tests must run in a specific order to avoid data conflicts
-
-### Use parallel execution (default) when:
-- Each test creates its own data and fixtures independently
-- Tests exercise unrelated features with no shared state
-- Tests are pure assertions against independent functions or components
-
-### Rules:
-- **Annotate serial groups**: Add a comment/docstring explaining WHY tests must be serial (e.g., `// Serial: tests share authenticated session and created entity`)
-- **Don't over-serialize**: If tests within an ordered group are actually independent, split them. Serial is safer but slower — use it only when ordering matters.
-- **Playwright E2E**: Use `test.describe.serial()` for flows that share state. Use regular `test.describe()` for independent tests.
-- **pytest**: Use `@pytest.mark.order(N)` or class-level ordering when tests must run sequentially.
-- **Vitest/Jest unit tests**: Should almost always be parallel (default). Only use sequential ordering if tests mutate shared module-level state (rare — prefer test isolation).
-- **Document in output**: When listing test files in your output, note which test groups are serial and why.
 
 ## Test Quality Rules
 
