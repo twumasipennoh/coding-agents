@@ -1,5 +1,7 @@
 # /feature-status - Check Feature Progress
 
+> **Pipeline announcements required.** Announce via `~/.claude/scripts/pipeline-step.sh` per `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `feature-status`, display name `Feature Status`. Call `begin feature-status "Feature Status"` at kickoff and `end feature-status --status ok` before emitting the reply. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response — `--output-format json` returns only the final turn's text, so any reply emitted before a subsequent tool call is silently dropped.
+
 Read `docs/prompts/FEATURE_PROMPTS.md` and report implementation progress.
 
 ## Steps
