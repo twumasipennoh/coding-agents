@@ -62,6 +62,8 @@ After user confirms go, stage and commit all changes with a descriptive commit m
 
 ### Step 9 — PR & Summary
 
+> ⚠️ **Call `pipeline-step.sh end feature-sprint --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 After the commit:
 1. Push the branch: `git push -u origin <branch>`
 2. Create a PR via `gh pr create` with:

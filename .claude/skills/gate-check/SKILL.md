@@ -34,6 +34,8 @@ Add the result row to the gate results table: `pipeline-audit: ✅ PASS / ⚠️
 
 ### 4. Reply format
 
+> ⚠️ **Call `pipeline-step.sh end gate-check --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 **Default chat reply: 1-3 sentences, no template, lead with N/M
 gates passed + any failures.** Pattern:
 

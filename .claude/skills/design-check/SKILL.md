@@ -44,6 +44,8 @@ Standalone design quality audit. Delegates to the `frontend-design-reviewer` age
 
 ## Reply format
 
+> ⚠️ **Call `pipeline-step.sh end design-check --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 **Default chat reply: 1-3 sentences, no template, lead with verdict +
 top finding.** Pattern:
 

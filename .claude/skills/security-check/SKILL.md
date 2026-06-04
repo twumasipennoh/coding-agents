@@ -42,6 +42,8 @@ Scan the codebase for common security issues mapped to the SECURITY PLAN TO-DOs 
 
 ## Reply format
 
+> ⚠️ **Call `pipeline-step.sh end security-check --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 **Default chat reply: 1-3 sentences, no template, lead with N
 passed + top finding.** Pattern:
 

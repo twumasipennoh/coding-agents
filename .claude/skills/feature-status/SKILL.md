@@ -16,6 +16,8 @@ Read `docs/prompts/FEATURE_PROMPTS.md` and report implementation progress.
 4. Count total tasks (`- [x]` and `- [ ]`) across all features.
 5. Reply format
 
+> ⚠️ **Call `pipeline-step.sh end feature-status --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 **Default chat reply: 1-3 sentences, no template, lead with current
 feature + tasks remaining + on-track status.** Pattern:
 

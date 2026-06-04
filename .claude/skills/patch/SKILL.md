@@ -60,6 +60,8 @@ Make the change. Keep it minimal — do not refactor, clean up, or improve surro
 
 ### 5. Reply format
 
+> ⚠️ **Call `pipeline-step.sh end patch --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 **Default chat reply: 1-3 sentences, no template, lead with outcome
 + gate summary.** Pattern:
 
