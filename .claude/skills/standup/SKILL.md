@@ -32,6 +32,8 @@ If output contains `✗` (overdue) or `⚠` (due within 14 days) lines, capture 
 
 ### 5. Reply format
 
+> ⚠️ **Call `pipeline-step.sh end standup --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 **Default chat reply: 1-3 sentences, no template, no section headers,
 no bullet lists.** Standup is a quick check-in — it should read like a
 Telegram message, not a memo. Pattern:

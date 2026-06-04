@@ -38,6 +38,8 @@ Run after completing a feature to validate everything before moving on. Incorpor
    - Agent config consistency
    - Next feature dependencies
 
+> ⚠️ **Call `pipeline-step.sh end checkpoint --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+
 5. **Present go/no-go decision**: Ask the user whether to proceed to the next feature or address issues first.
 
 ## Notes
