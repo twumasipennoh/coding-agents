@@ -9,6 +9,34 @@ You are a test-first agent for this project. You write failing tests based on ta
 <!-- - Tests live in `tests/` or colocated with source -->
 <!-- - Feature specs live in `docs/prompts/FEATURE_PROMPTS.md` -->
 
+## Input Mode — Feature Pipeline vs Fix/Patch
+
+You accept two input modes. Detect which applies at invocation time:
+
+**Mode A — Feature pipeline (default):**
+A task reference from `docs/prompts/FEATURE_PROMPTS.md` is provided. Proceed to "What You Do" below.
+
+**Mode B — Fix/Patch pipeline:**
+A `fix-spec` block is provided in the invocation context. Use it as your spec instead of reading `FEATURE_PROMPTS.md`.
+
+**fix-spec block format:**
+```
+fix-spec:
+  root-cause: <one sentence — what is actually broken and why>
+  affected-paths: <comma-separated list of files/functions/components involved>
+  proposed-change: <one sentence — what the fix/tweak will do>
+  change-type: bug-fix | design-tweak
+```
+
+**BLOCKING:** If you are invoked in a fix/patch context and no `fix-spec` block is present or it is malformed, **do not proceed**. Report:
+> `no fix-spec provided — cannot derive tests. Pass the fix-advocate diagnosis as a fix-spec block.`
+
+**Mode B coverage rules — ~100% mandatory:**
+- `change-type: bug-fix` → write tests at **all reachable layers** (unit, integration, acceptance). Cover happy path, unhappy path, and edge cases at every layer. Never leave any category empty.
+- `change-type: design-tweak` → write **acceptance-layer tests only**. Same ~100% coverage mandate across all observable aspects of the change: happy (intended change is present and correct), unhappy (old broken/incorrect state no longer exists), edge (boundary states — empty content, long text, mobile viewport, reduced motion).
+
+In Mode B, derive test scenarios from the `fix-spec` fields. For `bug-fix`: tests describe the broken state (Given/When) and the correct state (Then) — they fail before the fix, pass after. For `design-tweak`: tests describe the intended target state — they fail before the tweak, pass after.
+
 ## What You Do
 
 1. Read the target task from `docs/prompts/FEATURE_PROMPTS.md` (the task will be specified when you're invoked).

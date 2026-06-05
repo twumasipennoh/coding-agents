@@ -25,13 +25,34 @@ Invoke the **fix-advocate** agent and complete all 6 diagnosis steps:
 5. **Propose fix** — Write a specific, minimal fix with rationale. Describe the change without implementing it yet.
 6. **Defend** — Explain why this fix is correct and won't cause regressions.
 
-**STOP here. Present the diagnosis to the user and wait for explicit approval before writing any code.**
+**STOP here. Present the diagnosis to the user and wait for explicit approval before proceeding.**
 
-### 2. Write fix code (only after approval)
+### 2. Write failing tests (only after approval, BLOCKING)
 
-After the user approves the proposed fix, implement it. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code.
+After the user approves, construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
 
-### 3. Run all quality gates
+```
+fix-spec:
+  root-cause: <from fix-advocate step 3>
+  affected-paths: <from fix-advocate step 2 — files and functions>
+  proposed-change: <from fix-advocate step 5>
+  change-type: bug-fix
+```
+
+**STOP. Do not write any implementation code until test-creator confirms test files exist and are failing for the right reasons (assertion failures, not syntax errors or import errors).**
+
+~100% coverage required at every reachable layer:
+- **Unit** — pure logic, validation, model behavior. Happy path, unhappy (bad input, missing fields, error branches), edge (boundary values, empty inputs, all enum branches).
+- **Integration** — cross-component behavior, DB/repo layer, mocked external services. Happy, unhappy (service 4xx/5xx, DB write fail, auth rejected), edge (idempotency, partial data, concurrent writes).
+- **Acceptance** — full user-facing flow. Happy, unhappy (invalid inputs, session expiry, permission denied), edge (very long content, back-navigation, deep links).
+
+Never leave any category empty for any layer.
+
+### 3. Write fix code (only after tests are confirmed failing)
+
+After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code.
+
+### 4. Run all quality gates
 
 After the fix is written, run all gates:
 
@@ -40,11 +61,15 @@ After the fix is written, run all gates:
 - **security-reviewer**
 - **monitoring-spec-validator**
 
+**Conditional:**
+- **frontend-design-reviewer** — only if `~/.claude/scripts/needs-design-review.sh` exits 0 against the current changeset. **BLOCKING on CRITICAL findings only.** If the helper exits 2 (no `.claude/ui-paths.txt`), report `⏭️ SKIPPED — no UI paths configured` and continue.
+
 **Then sequentially:**
 - **test-runner** using this project's configured test command
 - **acceptance-tester** — re-runs the Phase 4 scenarios that the bug touches (or all of them, if scope is unclear). **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
+- **doc-updater** — run all applicable doc-sync phases. BLOCKING.
 
-### 4. Reply format
+### 5. Reply format
 
 > ⚠️ **Call `pipeline-step.sh end bug-fix --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
 
@@ -69,13 +94,17 @@ If asked to expand, use this template:
 Bug Fix — <summary>
 
 Diagnosis:   ✅ Complete (approved by user)
+Tests:       ✅ Written (<N> tests across <layers>)
 Fix applied: <one-line description of the change>
 
 Gate Results:
   pattern-enforcer:          ✅ PASS / ❌ FAIL
   security-reviewer:         ✅ PASS / ❌ FAIL
   monitoring-spec-validator: ✅ PASS / ❌ FAIL
+  frontend-design-reviewer:  ✅ PASS / ❌ FAIL / ⏭️ SKIPPED
   test-runner:               ✅ PASS / ❌ FAIL (XX passed, XX failed)
+  acceptance-tester:         ✅ PASS / ❌ FAIL / ⏭️ DEFERRED / ⏭️ SKIPPED
+  doc-updater:               ✅ PASS / ❌ FAIL
 
 Final: ✅ GO / ❌ NO-GO
 ```
@@ -83,5 +112,6 @@ Final: ✅ GO / ❌ NO-GO
 ## Notes
 - Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - Do NOT write any fix code before fix-advocate completes Steps 1-6 AND the user explicitly approves.
+- Do NOT write fix code before test-creator confirms failing tests exist — this is a hard sequencing gate.
 - If the user says "just fix it", still run fix-advocate first — this is non-negotiable.
 - Keep the fix minimal. Resist the urge to clean up surrounding code.

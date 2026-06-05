@@ -35,13 +35,55 @@ For bug fixes, invoke the **fix-advocate** agent and complete all 6 diagnosis st
 5. **Propose fix** — Write a specific, minimal fix with rationale.
 6. **Defend** — Explain why this fix is correct and won't cause regressions.
 
-**STOP. Present the diagnosis to the user and wait for explicit approval before writing any code.**
+**STOP. Present the diagnosis to the user and wait for explicit approval before proceeding.**
 
-### 3. Implement
+### 3. Write failing tests (BLOCKING — before any implementation)
+
+**Bug fix path:** Construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
+
+```
+fix-spec:
+  root-cause: <from fix-advocate step 3>
+  affected-paths: <from fix-advocate step 2 — files and functions>
+  proposed-change: <from fix-advocate step 5>
+  change-type: bug-fix
+```
+
+**STOP. Do not write any implementation code until test-creator confirms test files exist and are failing for the right reasons.**
+
+~100% coverage required at every reachable layer:
+- **Unit** — pure logic, validation, model behavior. Happy path, unhappy (bad input, missing fields, error branches), edge (boundary values, empty inputs, all enum branches).
+- **Integration** — cross-component behavior, DB/repo layer, mocked external services. Happy, unhappy (service 4xx/5xx, DB write fail, auth rejected), edge (idempotency, partial data, concurrent writes).
+- **Acceptance** — full user-facing flow. Happy, unhappy (invalid inputs, session expiry, permission denied), edge (very long content, back-navigation, deep links).
+
+Never leave any category empty for any layer.
+
+---
+
+**Design tweak path:** Construct a `fix-spec` block from the patch description and the files to be changed, then invoke **test-creator** in Mode B:
+
+```
+fix-spec:
+  root-cause: N/A (design tweak)
+  affected-paths: <files that will be changed>
+  proposed-change: <description of the intended visual/behavioral target state>
+  change-type: design-tweak
+```
+
+**STOP. Do not implement until test-creator confirms acceptance test files exist and are failing** (they describe the intended target state, which doesn't exist yet).
+
+~100% acceptance-layer coverage required — no unit or integration tests:
+- **Happy** — intended visual/behavioral change is present and correct.
+- **Unhappy** — old broken/incorrect state no longer exists.
+- **Edge** — boundary states (empty content, long text, mobile viewport, reduced motion).
+
+Never leave any category empty.
+
+### 4. Implement
 
 Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires.
 
-### 4. Run quality gates
+### 5. Run quality gates
 
 **In parallel (all read-only):**
 - **pattern-enforcer** — checks codebase conventions
@@ -58,7 +100,7 @@ Make the change. Keep it minimal — do not refactor, clean up, or improve surro
 **Then:**
 - **doc-updater** — run all applicable doc-sync phases. BLOCKING.
 
-### 5. Reply format
+### 6. Reply format
 
 > ⚠️ **Call `pipeline-step.sh end patch --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
 
@@ -73,7 +115,7 @@ If multiple gates failed, apply the one-beat rule from
 open with the count, deliver the most urgent failure, offer the rest
 if asked.
 
-The structured Type/Diagnosis/Change/Gate Results format is **opt-in
+The structured Type/Diagnosis/Tests/Change/Gate Results format is **opt-in
 only** — emit it only when the user explicitly asks for "the full
 breakdown", "expand", or "details". Don't lead with it.
 
@@ -84,6 +126,7 @@ Patch — <summary>
 
 Type:        Bug fix / Design tweak
 Diagnosis:   ✅ Complete (approved) / ⏭️ SKIPPED (design tweak)
+Tests:       ✅ Written (<N> tests across <layers>)
 Change:      <one-line description>
 
 Gate Results:
@@ -92,6 +135,7 @@ Gate Results:
   monitoring-spec-validator: ✅ PASS / ❌ FAIL
   frontend-design-reviewer:  ✅ PASS / ❌ FAIL / ⏭️ SKIPPED
   test-runner:               ✅ PASS / ❌ FAIL (XX passed, XX failed)
+  acceptance-tester:         ✅ PASS / ❌ FAIL / ⏭️ DEFERRED / ⏭️ SKIPPED
   doc-updater:               ✅ PASS / ❌ FAIL
 
 Final: ✅ GO / ❌ NO-GO
@@ -102,6 +146,7 @@ If NO-GO, list each failing gate with the specific findings that must be resolve
 ## Notes
 - Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - For bug fixes: do NOT write code before fix-advocate diagnosis + user approval.
-- For design tweaks: proceed directly to implementation — no diagnosis gate.
+- For bug fixes: do NOT write code before test-creator confirms failing tests exist — hard sequencing gate.
+- For design tweaks: do NOT implement before test-creator confirms acceptance tests exist and are failing.
 - If the user explicitly says "skip gates" or "no gates", respect that and only implement.
 - Do NOT auto-fix gate failures — report and wait for user direction.
