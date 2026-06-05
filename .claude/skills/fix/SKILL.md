@@ -61,6 +61,9 @@ After the fix is written, run all gates:
 - **security-reviewer**
 - **monitoring-spec-validator**
 
+**Conditional:**
+- **frontend-design-reviewer** — only if `~/.claude/scripts/needs-design-review.sh` exits 0 against the current changeset. **BLOCKING on CRITICAL findings only.** If the helper exits 2 (no `.claude/ui-paths.txt`), report `⏭️ SKIPPED — no UI paths configured` and continue.
+
 **Then sequentially:**
 - **test-runner** using this project's configured test command
 - **acceptance-tester** — re-runs the Phase 4 scenarios that the bug touches (or all of them, if scope is unclear). **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
@@ -98,6 +101,7 @@ Gate Results:
   pattern-enforcer:          ✅ PASS / ❌ FAIL
   security-reviewer:         ✅ PASS / ❌ FAIL
   monitoring-spec-validator: ✅ PASS / ❌ FAIL
+  frontend-design-reviewer:  ✅ PASS / ❌ FAIL / ⏭️ SKIPPED
   test-runner:               ✅ PASS / ❌ FAIL (XX passed, XX failed)
   acceptance-tester:         ✅ PASS / ❌ FAIL / ⏭️ DEFERRED / ⏭️ SKIPPED
   doc-updater:               ✅ PASS / ❌ FAIL
