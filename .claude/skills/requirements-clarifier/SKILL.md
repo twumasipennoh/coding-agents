@@ -170,12 +170,20 @@ For any e2e-unreachable seam identified in Phase 3, include explicit manual QA s
 
 **GATE: Pause after this phase and wait for user sign-off before proceeding.**
 
+**After user sign-off:** extract the E2E / Acceptance-layer scenarios from this phase and write them to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). Use the exact Given/When/Then format the acceptance-tester parses — do not summarize or paraphrase the scenarios. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
+
 ### Phase 5 — Plan
 Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If mockups were approved, reference them as the visual spec. Fold in the test scenarios from Phase 4 as the acceptance criterion.
 
 **Reference the Phase 1b decision.** State which path won — build, buy (and which package/app), or hybrid (and which pieces are bought vs. built). This anchors the plan so the build/buy/hybrid choice survives intact to implementation rather than getting forgotten between phases.
 
 **GATE: Present the full summary and ask the user to confirm before proceeding to implementation.**
+
+**After user confirms:** silently update docs before handing off to the feature pipeline:
+
+1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If the feature already has an entry, reconcile it rather than duplicating.
+2. **`docs/DECISIONS.md`** — append any architectural or approach decisions surfaced during the 5 phases (build/buy/hybrid choice, approach selected in Phase 2, any tradeoffs locked in Phase 3). Skip if no new decisions were made.
+3. Confirm in one line: "Updated FEATURE_PROMPTS.md (Feature N) and DECISIONS.md (N decisions)." Then invite the user to kick off `/feature`.
 
 ## Notes
 - Do NOT write any code during this skill (except mockup HTML files in Phase 2b via the `/mockup` skill).
