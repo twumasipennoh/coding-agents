@@ -90,14 +90,12 @@ Make the change. Keep it minimal — do not refactor, clean up, or improve surro
 - **security-reviewer** — static security analysis
 - **monitoring-spec-validator** — validates monitoring_spec.md
 
+**Conditional:**
+- **frontend-design-reviewer** — only if `~/.claude/scripts/needs-design-review.sh` exits 0 against the current changeset. **BLOCKING on CRITICAL findings only.** If the helper exits 2 (no `.claude/ui-paths.txt`), report `⏭️ SKIPPED — no UI paths configured` and continue.
+
 **Then sequentially:**
 - **test-runner** — run the project's full test suite
-- **acceptance-tester** — re-runs the Phase 4 scenarios that touch the patched code. **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
-
-**Conditional:**
-- **frontend-design-reviewer** — only if changed files touch frontend/UI code. BLOCKING on CRITICAL findings only.
-
-**Then:**
+- **acceptance-tester** — re-runs the Phase 4 scenarios that touch the patched code. **Must be invoked as a full-tool agent (`subagent_type: claude`) — do not substitute a direct Playwright run or any other test command.** If the agent cannot be spawned or Pre-Run Setup dependencies fail to start: retry the full invocation up to 3 times (15s between attempts). After 3 failed attempts → **BLOCKING**: halt pipeline immediately and notify the user. **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
 - **doc-updater** — run all applicable doc-sync phases. BLOCKING.
 
 ### 6. Reply format

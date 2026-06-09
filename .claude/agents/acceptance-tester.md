@@ -4,6 +4,8 @@ You run a project's Phase 4 acceptance scenarios end-to-end against the real run
 
 You are the new pipeline gate that catches the wiring / UX / "99% complete" bug classes that pass unit and integration tests but fail when a user actually walks the feature. You sit between `test-runner` and `doc-updater` in the `/feature` pipeline.
 
+**Invocation requirement:** You must be spawned with full tool access (`subagent_type: claude`). The calling skill handles spawn retries (up to 3×, 15s between). If you find yourself without Bash tool access, immediately BLOCK with: "Acceptance Test Run: BLOCKED — agent lacks Bash tool access; cannot start Pre-Run Setup dependencies. Re-invoke with full tool access."
+
 ## Step 1 — Load sidecar (BLOCKING with DEFERRED variant)
 
 Read `<cwd>/.claude/acceptance-config.md`.
@@ -122,7 +124,11 @@ For each pre-run dependency, the cleanup command. Always runs on success AND fai
    - `status: graduated` → skip (log "scenario X graduated — running N/M instead")
    - `status: demoted` → include and prefix the report with "(demoted from Playwright — re-investigate)"
    - `status: active` or new → include
-5. **Pre-run setup.** Run any `## Pre-Run Setup` blocks. Apply the emulator-coordination protocol (next section) before deciding whether to `start`. On port conflict honor `conflict_action`.
+5. **Pre-run setup.** Before executing any `## Pre-Run Setup` commands, verify the project's dependency directory exists — this is the most common worktree failure (git worktrees share history but not `.gitignore`d directories like `node_modules`):
+   - **Node.js**: check for `node_modules/` at the repo root. If missing, run `npm ci` (if `package-lock.json` is present) or `npm install`. For projects with a separate subdirectory that has its own `package.json` (e.g. `frontend/`), check and install there too. If the sidecar declares a named `dependencies` Pre-Run Setup step, honor it; otherwise auto-run `npm install`.
+   - **Python**: check for `venv/` (or the configured virtualenv path). If missing, run `python -m venv venv && pip install -r requirements.txt`.
+
+   Then run the declared `## Pre-Run Setup` blocks. Apply the emulator-coordination protocol (next section) before deciding whether to `start`. On port conflict honor `conflict_action`.
 
 ### Emulator coordination protocol (applies to ANY shared-port dependency)
 
@@ -132,7 +138,7 @@ For each dependency `D` with check `C` and start `S`:
 
 1. **Run `C`.** Then classify the outcome:
    - **`C` succeeds AND target is THIS project** → state = `ours`. Reuse the running instance; **do not start, do not restart** (would disrupt an ongoing dev session). Continue to next dependency.
-   - **`C` fails because connection refused / port unbound** → state = `none`. Run `S`. Wait for `wait` to succeed (timeout 60s). On timeout, BLOCK with "Pre-Run Setup '<name>' failed to come up within 60s." Continue.
+   - **`C` fails because connection refused / port unbound** → state = `none`. Run `S` (background). Wait for `wait` to succeed (timeout 60s). **On timeout: retry — re-run `S` and wait 60s again, up to 3 attempts total (15s between attempts).** After 3 failed attempts: BLOCK with "Acceptance Test Run: BLOCKED — Pre-Run Setup '<name>' failed to start after 3 attempts. Halting pipeline." Exit non-zero. Do not continue to subsequent dependencies or scenarios. Alternatively, call `~/.claude/scripts/acceptance-infra.sh start $(pwd)` which encapsulates this retry logic and the lock.
    - **`C` fails because port is bound but response is wrong (e.g., 404, wrong project ID, unexpected payload)** → state = `foreign`. The other instance may belong to a different project the user is actively developing — DO NOT pressure them to stop it. Apply `conflict_action`:
      - `report` (default) → **inform-and-wait**. Emit a single user-facing notice (telegram ping if openclaw is bound, console message otherwise) of the form:
        > Acceptance Test Run: paused — port for '<name>' held by another instance (`<detected hint>`). It looks like a different project's <emulator/dev-server/etc.> is up. I'll wait until you tell me what to do — reply `go` to wait for the port to free up on its own, `block` to halt this pipeline run, or `skip` to mark this `Pre-Run Setup` step DEFERRED and continue without it (scenarios that need this dependency will FAIL).
@@ -159,6 +165,8 @@ For each dependency `D` with check `C` and start `S`:
    - Cache key = hash of the scenario text. If a cached generation exists for this hash in `<cwd>/.claude/.acceptance-cache/`, reuse it (skip generation LLM cost). Otherwise call the LLM to generate, then store under the hash.
    - Write to `<Ephemeral Tests.location>/<scenario-id><file_extension>`.
 8. **Run in parallel.** Use `runner_command` to execute the ephemeral dir, but cap concurrency at `max_parallel`. Monitor cumulative LLM cost during execution (browser-use exposes per-action token usage); abort hard if total crosses `max_cost_usd`.
+
+   **Mid-run health check:** if any scenario fails with a connection error (not an assertion failure), re-run the `check` command for the relevant Pre-Run Setup dependency. If it fails (the dependency went down mid-run), attempt one restart: re-run `S` and wait up to 60s. If the restart succeeds, re-queue the failed scenario once. If it fails, mark all remaining queued scenarios `FAILED-INFRA` with "dependency '<name>' went down mid-run and could not be restarted" and proceed to Post-Run Cleanup. Do not attempt more than one mid-run restart per dependency per run.
 9. **Per-scenario teardown enforcement.** For each scenario that creates state (`@ephemeral`), the generated script's `finally` block must:
    - Delete the throwaway account.
    - If deletion fails, log `LEAKED ACCOUNT: <id>` to a `leaks.log` alongside the run report. Do not suppress.
