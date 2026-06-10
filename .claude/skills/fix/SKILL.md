@@ -48,13 +48,15 @@ fix-spec:
 
 Never leave any category empty for any layer.
 
+**Acceptance-test checkpoint (BLOCKING):** Before proceeding, verify that test-creator produced at least one acceptance-layer test file. If acceptance tests are missing, re-invoke test-creator with an explicit directive to write the acceptance layer. Do NOT proceed to implementation with only unit/integration tests.
+
 ### 3. Write fix code (only after tests are confirmed failing)
 
 After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code.
 
-### 4. Run all quality gates
+### 4. Run quality gates (static analysis + test suite)
 
-After the fix is written, run all gates:
+After the fix is written, run these gates:
 
 **In parallel:**
 - **pattern-enforcer**
@@ -64,12 +66,23 @@ After the fix is written, run all gates:
 **Conditional:**
 - **frontend-design-reviewer** — only if `~/.claude/scripts/needs-design-review.sh` exits 0 against the current changeset. **BLOCKING on CRITICAL findings only.** If the helper exits 2 (no `.claude/ui-paths.txt`), report `⏭️ SKIPPED — no UI paths configured` and continue.
 
-**Then sequentially:**
+**Then:**
 - **test-runner** using this project's configured test command
-- **acceptance-tester** — re-runs the Phase 4 scenarios that the bug touches (or all of them, if scope is unclear). **Must be invoked as a full-tool agent (`subagent_type: claude`) — do not substitute a direct Playwright run or any other test command.** If the agent cannot be spawned or Pre-Run Setup dependencies fail to start: retry the full invocation up to 3 times (15s between attempts). After 3 failed attempts → **BLOCKING**: halt pipeline immediately and notify the user. **BLOCKING** if any scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent. Reports `SKIPPED` if the opt-out marker is present. See `~/.claude/agents/acceptance-tester.md` for the contract.
 - **doc-updater** — run all applicable doc-sync phases. BLOCKING.
 
-### 5. Reply format
+### 5. Run acceptance-tester (separate step, BLOCKING)
+
+This is its own pipeline step — do NOT collapse it into the quality gates step above.
+
+Invoke **acceptance-tester** as a full-tool agent (`subagent_type: claude`). It re-runs the Phase 4 scenarios that the bug touches (or all of them, if scope is unclear). **Do not substitute a direct Playwright run or any other test command.**
+
+- If the agent cannot be spawned or Pre-Run Setup dependencies fail to start: retry the full invocation up to 3 times (15s between attempts). After 3 failed attempts → **BLOCKING**: halt pipeline immediately and notify the user.
+- **BLOCKING** if any scenario can't reach its `Then` clause.
+- Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent.
+- Reports `SKIPPED` if the opt-out marker is present.
+- See `~/.claude/agents/acceptance-tester.md` for the contract.
+
+### 6. Reply format
 
 > ⚠️ **Call `pipeline-step.sh end bug-fix --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
 
