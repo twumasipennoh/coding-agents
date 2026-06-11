@@ -1,6 +1,6 @@
 # /patch — Quick Fix or Design Tweak with Gates
 
-> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `patch`, display name `Patch`. Call `begin patch "Patch" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end patch --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `patch`, display name `Patch`. Call `begin patch "Patch" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below. Skip interactive steps (user gates, clarification phases) — they self-announce. **`end` is delegated to `/pipeline-tail`** — do NOT call `end` yourself.
 
 Lightweight flow for small fixes and design tweaks. Runs the right quality gates without the full feature pipeline.
 
@@ -13,6 +13,17 @@ Lightweight flow for small fixes and design tweaks. Runs the right quality gates
 A description is required. If none given, ask the user for one before proceeding.
 
 ## Steps
+
+### 0. Auto-branch
+
+Detect the current branch. If on the base branch (`main` or `master`):
+1. Derive a slug from the patch description (e.g., `button-color-update` → `patch/button-color-update`).
+2. Create the branch: `git checkout -b patch/<slug>`.
+3. Log: "Created branch patch/<slug>."
+
+If already on a non-base branch, stay on it and log: "Using existing branch <name>."
+
+This must happen **before any implementation work** — all code changes must land on the patch branch, not on main.
 
 ### 1. Classify the change
 
@@ -85,79 +96,19 @@ Never leave any category empty.
 
 Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires.
 
-### 5. Run quality gates (static analysis + test suite)
+### 5. Hand off to /pipeline-tail
 
-**In parallel (all read-only):**
-- **pattern-enforcer** — checks codebase conventions
-- **security-reviewer** — static security analysis
-- **monitoring-spec-validator** — validates monitoring_spec.md
+After the implementation is complete, invoke the **`/pipeline-tail`** skill with:
+- **pipeline-id:** `patch`
+- **display-name:** `Patch`
+- **skill-type:** `patch`
 
-**Conditional:**
-- **frontend-design-reviewer** — only if `~/.claude/scripts/needs-design-review.sh` exits 0 against the current changeset. **BLOCKING on CRITICAL findings only.** If the helper exits 2 (no `.claude/ui-paths.txt`), report `⏭️ SKIPPED — no UI paths configured` and continue.
+The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
 
-**Then:**
-- **test-runner** — run the project's full test suite
-- **doc-updater** — run all applicable doc-sync phases. BLOCKING.
-
-### 6. Run acceptance-tester (separate step, BLOCKING)
-
-This is its own pipeline step — do NOT collapse it into the quality gates step above.
-
-Invoke **acceptance-tester** as a full-tool agent (`subagent_type: claude`). It re-runs the Phase 4 scenarios that touch the patched code. **Do not substitute a direct Playwright run or any other test command.**
-
-- If the agent cannot be spawned or Pre-Run Setup dependencies fail to start: retry the full invocation up to 3 times (15s between attempts). After 3 failed attempts → **BLOCKING**: halt pipeline immediately and notify the user.
-- **BLOCKING** if any scenario can't reach its `Then` clause.
-- Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent.
-- Reports `SKIPPED` if the opt-out marker is present.
-- See `~/.claude/agents/acceptance-tester.md` for the contract.
-
-### 7. Reply format
-
-> ⚠️ **Call `pipeline-step.sh end patch --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
-
-**Default chat reply: 1-3 sentences, no template, lead with outcome
-+ gate summary.** Pattern:
-
-    patch: <one-line outcome>. gates: <N/M passed>. <"push?" if green,
-    "blocker: <one-line>" if red>
-
-If multiple gates failed, apply the one-beat rule from
-`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
-open with the count, deliver the most urgent failure, offer the rest
-if asked.
-
-The structured Type/Diagnosis/Tests/Change/Gate Results format is **opt-in
-only** — emit it only when the user explicitly asks for "the full
-breakdown", "expand", or "details". Don't lead with it.
-
-If asked to expand, use this template:
-
-```
-Patch — <summary>
-
-Type:        Bug fix / Design tweak
-Diagnosis:   ✅ Complete (approved) / ⏭️ SKIPPED (design tweak)
-Tests:       ✅ Written (<N> tests across <layers>)
-Change:      <one-line description>
-
-Gate Results:
-  pattern-enforcer:          ✅ PASS / ❌ FAIL
-  security-reviewer:         ✅ PASS / ❌ FAIL
-  monitoring-spec-validator: ✅ PASS / ❌ FAIL
-  frontend-design-reviewer:  ✅ PASS / ❌ FAIL / ⏭️ SKIPPED
-  test-runner:               ✅ PASS / ❌ FAIL (XX passed, XX failed)
-  acceptance-tester:         ✅ PASS / ❌ FAIL / ⏭️ DEFERRED / ⏭️ SKIPPED
-  doc-updater:               ✅ PASS / ❌ FAIL
-
-Final: ✅ GO / ❌ NO-GO
-```
-
-If NO-GO, list each failing gate with the specific findings that must be resolved.
+**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Notes
-- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - For bug fixes: do NOT write code before fix-advocate diagnosis + user approval.
 - For bug fixes: do NOT write code before test-creator confirms failing tests exist — hard sequencing gate.
 - For design tweaks: do NOT implement before test-creator confirms acceptance tests exist and are failing.
 - If the user explicitly says "skip gates" or "no gates", respect that and only implement.
-- Do NOT auto-fix gate failures — report and wait for user direction.

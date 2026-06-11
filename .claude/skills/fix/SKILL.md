@@ -1,6 +1,6 @@
 # /fix - Bug Fix with Diagnosis Gate
 
-> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `bug-fix`, display name `Bug Fix`. Call `begin bug-fix "Bug Fix" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end bug-fix --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `bug-fix`, display name `Bug Fix`. Call `begin bug-fix "Bug Fix" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below. Skip interactive steps (user gates, clarification phases) — they self-announce. **`end` is delegated to `/pipeline-tail`** — do NOT call `end` yourself.
 
 Fix a bug using the **fix-advocate** agent for mandatory diagnosis before any code is written.
 
@@ -13,6 +13,17 @@ Fix a bug using the **fix-advocate** agent for mandatory diagnosis before any co
 A bug description is required. If none given, ask the user for one before proceeding.
 
 ## Steps
+
+### 0. Auto-branch
+
+Detect the current branch. If on the base branch (`main` or `master`):
+1. Derive a slug from the bug description (e.g., `login-redirect-loop` → `fix/login-redirect-loop`).
+2. Create the branch: `git checkout -b fix/<slug>`.
+3. Log: "Created branch fix/<slug>."
+
+If already on a non-base branch, stay on it and log: "Using existing branch <name>."
+
+This must happen **before any implementation work** — all code changes must land on the fix branch, not on main.
 
 ### 1. Run fix-advocate — diagnosis (BLOCKING)
 
@@ -54,76 +65,18 @@ Never leave any category empty for any layer.
 
 After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code.
 
-### 4. Run quality gates (static analysis + test suite)
+### 4. Hand off to /pipeline-tail
 
-After the fix is written, run these gates:
+After the fix is written, invoke the **`/pipeline-tail`** skill with:
+- **pipeline-id:** `bug-fix`
+- **display-name:** `Bug Fix`
+- **skill-type:** `fix`
 
-**In parallel:**
-- **pattern-enforcer**
-- **security-reviewer**
-- **monitoring-spec-validator**
+The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
 
-**Conditional:**
-- **frontend-design-reviewer** — only if `~/.claude/scripts/needs-design-review.sh` exits 0 against the current changeset. **BLOCKING on CRITICAL findings only.** If the helper exits 2 (no `.claude/ui-paths.txt`), report `⏭️ SKIPPED — no UI paths configured` and continue.
-
-**Then:**
-- **test-runner** using this project's configured test command
-- **doc-updater** — run all applicable doc-sync phases. BLOCKING.
-
-### 5. Run acceptance-tester (separate step, BLOCKING)
-
-This is its own pipeline step — do NOT collapse it into the quality gates step above.
-
-Invoke **acceptance-tester** as a full-tool agent (`subagent_type: claude`). It re-runs the Phase 4 scenarios that the bug touches (or all of them, if scope is unclear). **Do not substitute a direct Playwright run or any other test command.**
-
-- If the agent cannot be spawned or Pre-Run Setup dependencies fail to start: retry the full invocation up to 3 times (15s between attempts). After 3 failed attempts → **BLOCKING**: halt pipeline immediately and notify the user.
-- **BLOCKING** if any scenario can't reach its `Then` clause.
-- Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent.
-- Reports `SKIPPED` if the opt-out marker is present.
-- See `~/.claude/agents/acceptance-tester.md` for the contract.
-
-### 6. Reply format
-
-> ⚠️ **Call `pipeline-step.sh end bug-fix --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
-
-**Default chat reply: 1-3 sentences, no template, lead with outcome
-+ gate summary.** Pattern:
-
-    fix: <one-line outcome>. gates: <N/M passed>. <"push?" if green,
-    "blocker: <one-line>" if red>
-
-If multiple gates failed, apply the one-beat rule from
-`~/.claude/CLAUDE.md § "Multi-part answers — one beat per turn"` —
-open with the count, deliver the most urgent failure, offer the rest
-if asked.
-
-The structured Diagnosis/Fix/Gate Results format is **opt-in only** —
-emit it only when the user explicitly asks for "the full breakdown",
-"expand", or "details". Don't lead with it.
-
-If asked to expand, use this template:
-
-```
-Bug Fix — <summary>
-
-Diagnosis:   ✅ Complete (approved by user)
-Tests:       ✅ Written (<N> tests across <layers>)
-Fix applied: <one-line description of the change>
-
-Gate Results:
-  pattern-enforcer:          ✅ PASS / ❌ FAIL
-  security-reviewer:         ✅ PASS / ❌ FAIL
-  monitoring-spec-validator: ✅ PASS / ❌ FAIL
-  frontend-design-reviewer:  ✅ PASS / ❌ FAIL / ⏭️ SKIPPED
-  test-runner:               ✅ PASS / ❌ FAIL (XX passed, XX failed)
-  acceptance-tester:         ✅ PASS / ❌ FAIL / ⏭️ DEFERRED / ⏭️ SKIPPED
-  doc-updater:               ✅ PASS / ❌ FAIL
-
-Final: ✅ GO / ❌ NO-GO
-```
+**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Notes
-- Default chat reply is 1-3 sentences in one message. Structured format is opt-in only.
 - Do NOT write any fix code before fix-advocate completes Steps 1-6 AND the user explicitly approves.
 - Do NOT write fix code before test-creator confirms failing tests exist — this is a hard sequencing gate.
 - If the user says "just fix it", still run fix-advocate first — this is non-negotiable.
