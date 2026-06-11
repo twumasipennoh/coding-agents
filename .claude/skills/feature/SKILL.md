@@ -1,6 +1,6 @@
 # Feature Implementation Skill
 
-> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `feature-sprint`, display name `Feature Sprint`. Call `begin feature-sprint "Feature Sprint" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end feature-sprint --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `feature-sprint`, display name `Feature Sprint`. Call `begin feature-sprint "Feature Sprint" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below. Skip interactive steps (user gates, clarification phases) — they self-announce. **`end` is delegated to `/pipeline-tail`** — do NOT call `end` yourself.
 
 This skill implements Pattern A (Feature Sprint) from `.claude/orchestration/ORCHESTRATION.md`.
 
@@ -15,6 +15,17 @@ Check codebase state - does backend exist? What's actually implemented? Do not a
 
 ### Step 0b — Clarify
 Run requirements clarification phases with user. If user references task numbers that don't exist, clarify before proceeding.
+
+### Step 0c — Auto-branch
+
+Detect the current branch. If on the base branch (`main` or `master`):
+1. Derive a slug from the feature name or task description (e.g., `add-user-notifications` → `feature/add-user-notifications`).
+2. Create the branch: `git checkout -b feature/<slug>`.
+3. Log: "Created branch feature/<slug>."
+
+If already on a non-base branch, stay on it and log: "Using existing branch <name>."
+
+This must happen **before any implementation work** — all code changes must land on the feature branch, not on main.
 
 ### Step 1 — Pre-Flight Validation
 Run the **pre-flight** agent to verify the project is in a clean state:
@@ -31,50 +42,20 @@ Run the **test-creator** agent -> reads the task spec from `FEATURE_PROMPTS.md`,
 ### Step 3 — Implement Feature
 Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps."
 
-### Step 4 — Review (parallel)
-Run these two agents in parallel — both are read-only reviewers and ALWAYS run (no conditions):
-- **pattern-enforcer** -> checks codebase conventions
-- **security-reviewer** -> checks security posture
+### Step 4 — Monitoring (feature-only)
 
-If either reports issues, fix them before proceeding.
+Run the **monitoring-implementer** agent. Produces/updates monitoring infrastructure from `monitoring_spec.md`. If no spec exists yet, reports DEFERRED and continues.
 
-### Step 5 — Test Suite
-Run the **test-runner** agent -> full suite across all layers. Must be all green before proceeding.
+### Step 5 — Hand off to /pipeline-tail
 
-### Step 5b — Acceptance Test
-Run the **acceptance-tester** agent to execute Phase 4 scenarios end-to-end. **BLOCKING** if any scenario can't reach its `Then` clause. If `.claude/acceptance-config.md` is missing AND no `.claude/no-acceptance` marker is present, the agent reports `DEFERRED` — the pipeline continues but a one-line notice is logged for follow-up. If `.claude/no-acceptance` is present (the project's current state), the agent reports `SKIPPED` and the pipeline continues. See `~/.claude/agents/acceptance-tester.md` for the contract.
+After implementation and monitoring are complete, invoke the **`/pipeline-tail`** skill with:
+- **pipeline-id:** `feature-sprint`
+- **display-name:** `Feature Sprint`
+- **skill-type:** `feature`
 
-### Step 6 — Doc Sync
-Run the **doc-updater** agent -> performs all 7 phases:
-1. Writes `TESTING_<FEATURE_NAME>.md` in `docs/prompts/`
-2. Updates `FEATURE_PROMPTS.md` (checkboxes + completion notes)
-3. Appends to `docs/DECISIONS.md` (if new decisions were made)
-4. Updates agent memory (`.claude/agent-memory/`)
-5. Updates PRD to reflect what was built
-6. Updates `README.md` (new routes, endpoints, features, docs)
-7. Flags items needing human attention (CLAUDE.md, agent configs)
+The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
 
-### Step 7 — User Gate
-Mark the task checkbox as complete in FEATURE_PROMPTS.md. If all tasks in the feature are now `[x]` (excluding `[-]` deferred items), also append `✅ COMPLETE` to the feature heading. Present the doc-updater's summary and GATES completion log to the user. Ask whether to proceed to the next feature.
-
-### Step 8 — Commit
-After user confirms go, stage and commit all changes with a descriptive commit message summarizing the feature/task implemented.
-
-### Step 9 — PR & Summary
-
-> ⚠️ **Call `pipeline-step.sh end feature-sprint --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
-
-After the commit:
-1. Push the branch: `git push -u origin <branch>`
-2. Create a PR via `gh pr create` with:
-   - Title derived from the feature name and task
-   - Body containing: summary of changes, gates completion log, test counts
-3. Present the user with:
-   ```
-   ✅ Feature complete and committed.
-   PR: https://github.com/<owner>/<repo>/pull/<number>
-   ```
-4. Include the PR link in the final summary sent to the user.
+**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Completion Criteria
 
@@ -91,5 +72,4 @@ Do not mark a task complete until:
 - [ ] Agent memory updated
 - [ ] PRD updated to reflect implementation
 - [ ] README updated (if new routes/endpoints/features)
-- [ ] User confirms go/no-go
-- [ ] PR created and link shared with user
+- [ ] PR created with GATES log + PR link
