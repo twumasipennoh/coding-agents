@@ -85,6 +85,7 @@ Run these in order. If any fail, call `pipeline-step.sh fail deploy "Pre-Deploy 
 2. **Auth check:** Run `npx firebase-tools@latest projects:list --json 2>/dev/null | head -5` to verify authentication. If this fails, report the auth issue and stop.
 3. **Run tests:** Execute each command in `deploy.json.testCommands` sequentially. If any test command fails, stop.
 4. **Run acceptance-tester (final gate before shipping):** Invoke the **acceptance-tester** agent. **BLOCKING** if any Phase 4 scenario can't reach its `Then` clause. Reports `DEFERRED` if `.claude/acceptance-config.md` is missing AND `.claude/no-acceptance` is absent (note logged; deploy continues — features whose Phase 4 was passed locally during `/feature` remain trusted). Reports `SKIPPED` if the opt-out marker is present. Set `acceptance_required: true` in `deploy.json` to upgrade `DEFERRED` to `FAIL` for high-stakes targets like prod.
+   - **Invocation rule:** Do NOT instruct the acceptance-tester to treat missing infrastructure as DEFERRED. The agent's own `Pre-Run Setup` blocks (defined in the project's `acceptance-config.md`) handle starting dependencies (emulators, dev servers) and detecting port conflicts — let that logic run. The correct DEFERRED state is agent-driven (config missing, user replied `skip` to a conflict prompt), not a shortcut for "infra was down when I checked."
 5. **Run build:** Execute each command in `deploy.json.buildCommands[<target>]` sequentially. If build fails, stop.
 6. **Env file verification:** If `deploy.json.envFiles` is set for this target, verify those files exist and spot-check that they reference the correct project ID (grep for the project ID in the env file).
 
@@ -152,6 +153,31 @@ Do nothing specific in this step beyond the helper call — the pipeline-step he
 
 - **On success:** `pipeline-step.sh done deploy "Notify"`, then `pipeline-step.sh end deploy --status ok --note "<project-name> to <env-label> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>. URL: <deployed-url>?v=<short-hash>"`.
 - **On failure:** `pipeline-step.sh fail deploy "Notify" "<failure-reason>"`, then `pipeline-step.sh end deploy --status fail --note "<project-name> to <env-label>. <failure-reason>"`.
+
+**Post-deploy verification checklist (success only).** After calling `end`, and before emitting the final assistant message, generate a **Verify:** section tailored to what was actually deployed.
+
+**How to build the checklist:**
+
+1. **Dynamic items (from the diff).** Run `git log --oneline <last-deploy-commit>..HEAD` (or `origin/main..HEAD` if no prior deploy) and `git diff --stat` for the same range. From the changed files and commit messages, generate 2-5 verification items that a human can check in under 2 minutes. Map changes to user-visible behavior:
+   - Auth/login files changed → "Log out and back in, verify session works"
+   - API endpoint or Cloud Function changed → "Hit the affected endpoint / trigger the function and confirm the response"
+   - UI component or page changed → "Open the affected page and verify the change renders correctly"
+   - Database schema/indexes changed → "Verify the affected query returns results (not FAILED_PRECONDITION)"
+   - CSS/styling changed → "Open the affected page on mobile and desktop, confirm layout"
+   - New feature added → "Walk through the new feature end-to-end"
+   - Bug fix → "Reproduce the original bug scenario and confirm it's resolved"
+   - Config/env change → "Verify the app reads the new config correctly (check logs or behavior)"
+   Each item should be specific enough to act on without reading the diff. Name the page, feature, or endpoint affected.
+
+2. **Compose the section.** Cap at 7 bullets total. Replace `{url}` with the deployed URL (including `?v=<short-hash>` cache-bust) and `{env}` with the resolved environment label in any item that uses them. Omit the section entirely only if the diff produced no actionable items.
+
+Example output shape (a deploy that changed the feed ranker + fixed a save bug):
+
+```
+**Verify:**
+- Open {url}, scroll the Discover feed, confirm new content ordering feels right (ranker change)
+- Save a piece of content, navigate away and back, confirm it persists (save bug fix)
+```
 
 ## deploy.json — `kind: "firebase"` schema
 
