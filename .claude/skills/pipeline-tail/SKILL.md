@@ -35,9 +35,18 @@ Run gates in this order. Each gate gets up to **3 retries** on failure. On failu
 - **monitoring-spec-validator** — validates monitoring_spec.md. Reports DEFERRED if no spec exists.
 - **frontend-design-reviewer** — CONDITIONAL: only if `~/.claude/scripts/needs-design-review.sh` exits 0. BLOCKING on CRITICAL. If exit 2 (no `ui-paths.txt`), report SKIPPED.
 
-**Phase B — Sequential test gates:**
-- **test-runner** — full test suite across all layers. BLOCKING.
-- **acceptance-tester** — invoke as a full-tool agent (`subagent_type: claude`). BLOCKING if scenarios can't reach `Then` clause. Reports DEFERRED if `.claude/acceptance-config.md` missing and no `.claude/no-acceptance`. Reports SKIPPED if `.claude/no-acceptance` present.
+**Phase B — Sequential test gates (with shared test environment):**
+
+Before running any Phase B gate, start the test environment deterministically:
+- **Test Environment Setup** — run `~/.claude/scripts/acceptance-infra.sh start $(pwd)` via Bash (not an LLM agent). This starts emulators/dev servers per the project's `.claude/acceptance-config.md` Pre-Run Setup block, with retry logic and the cross-project lock. If the project has no `acceptance-config.md`, skip this sub-step (test-runner manages its own Pre-Test Setup via `test-commands.md`). Announce via `pipeline-step.sh start/done/fail`.
+- If setup fails after retries, BLOCK the pipeline — do not proceed to test gates.
+
+Then run the gates sequentially:
+- **test-runner** — full test suite across all layers. BLOCKING. Emulators are already running; test-runner's Pre-Test Setup should verify (check) but not re-start.
+- **acceptance-tester** — invoke as a full-tool agent (`subagent_type: claude`). BLOCKING if scenarios can't reach `Then` clause. Reports DEFERRED only if sidecar was auto-scaffolded (missing `.claude/acceptance-config.md`). Reports SKIPPED if `.claude/no-acceptance` present. Emulators are already running; Pre-Run Setup checks should find state = `ours` and reuse.
+
+After Phase B completes (success or failure):
+- **Test Environment Teardown** — run `~/.claude/scripts/acceptance-infra.sh stop $(pwd)` via Bash. Always runs (success or failure). Announce via `pipeline-step.sh start/done`. Do NOT skip on failure — cleanup must happen.
 
 **Auto-fix retry loop:**
 ```

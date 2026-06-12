@@ -39,6 +39,8 @@ If pre-flight reports **BLOCKING** issues, fix them before proceeding. If **WARN
 ### Step 2 — Write Failing Tests
 Run the **test-creator** agent -> reads the task spec from `FEATURE_PROMPTS.md`, writes failing tests based on "Tests to Write First."
 
+**Acceptance scenario checkpoint (BLOCKING):** Before proceeding to Step 3, verify that test-creator wrote at least one acceptance scenario (Given/When/Then file in `tests/acceptance/scenarios/` or equivalent per the project's `.claude/acceptance-config.md` Scenario Source). If acceptance scenarios are missing, re-invoke test-creator with an explicit directive to write the acceptance layer. Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
+
 ### Step 3 — Implement Feature
 Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps."
 
