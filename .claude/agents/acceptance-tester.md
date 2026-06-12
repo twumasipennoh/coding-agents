@@ -191,7 +191,7 @@ These are non-negotiable rules for how the agent generates browser-use / cli scr
 
 ### LLM model + provider
 
-- **Default to `claude-sonnet-4-6`** in `new ChatAnthropic({ model: ... })`. Haiku 4.5 was observed to stall mid-task with "No next action returned by LLM!" on multi-step navigation. Use Haiku only when the scenario is single-step (open → assert) and known-stable; default to Sonnet for anything that involves login + nav + interaction.
+- **Default to `gemini-2.5-flash`** in `new ChatGoogle({ model: ... })`. Use `GOOGLE_API_KEY` for auth (already in env). For simpler single-step scenarios `gemini-2.5-flash` is fine; prefer `gemini-2.5-pro` if a scenario involves complex multi-step navigation where a weaker model stalls.
 
 ### browser-use@0.7+ API surface (Node/TS)
 
@@ -199,16 +199,16 @@ Real signatures, copy-paste-safe:
 
 ```ts
 import { Agent } from "browser-use";
-import { ChatAnthropic } from "browser-use/llm/anthropic";
+import { ChatGoogle } from "browser-use/llm/google";
 
-const llm = new ChatAnthropic({ model: "claude-sonnet-4-6", apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
+const llm = new ChatGoogle({ model: process.env.BROWSER_USE_MODEL ?? "gemini-2.5-flash", apiKey: process.env.GOOGLE_API_KEY });
 const agent = new Agent({ llm, task: "... single multi-line natural-language task string ..." });
 
 const history = await agent.run(/* max_steps */ 30);           // POSITIONAL arg, not { maxSteps }
 const summary = history.final_result();                          // METHOD call, returns string | null
 ```
 
-- **NEVER** import from `browser-use/llm` (no flat subpath). Per-provider subpaths only: `browser-use/llm/anthropic`, `browser-use/llm/openai`, etc.
+- **NEVER** import from `browser-use/llm` (no flat subpath). Per-provider subpaths only: `browser-use/llm/google`, `browser-use/llm/anthropic`, `browser-use/llm/openai`, etc.
 - **NEVER** pass `agent.run({ maxSteps: N })`. Real signature: `agent.run(max_steps?: number)` positional.
 - **NEVER** access `history.finalResult` or `result.final_result`. Method, not property: `await history.final_result()`.
 - **NEVER pin browser-use@<0.7.0`**. 0.2.0 was published broken (missing `system_prompt.md` templates from `dist/agent/`); `new Agent()` fails at construction with ENOENT. The package.json `pinned_version` field defaults to `browser-use@0.7.0` in `setup-acceptance`'s scaffold.
@@ -240,8 +240,8 @@ For ephemeral scripts (which live under `tests/acceptance/ephemeral/*` and are g
 
 ### Wall-clock + cost defaults
 
-- ~3-4 min wall-clock per scenario on Sonnet 4.6 (~25-30 agent steps for login + nav + assert)
-- ~$0.20-$0.50 per scenario on Sonnet 4.6
+- ~3-4 min wall-clock per scenario on gemini-2.5-flash (~25-30 agent steps for login + nav + assert)
+- ~$0.05-$0.15 per scenario on gemini-2.5-flash (significantly cheaper than Sonnet)
 - Default `max_cost_usd: 5.00` covers ~10-20 scenarios per pipeline run
 - Default `max_parallel: 3` keeps backend load reasonable for emulator-backed scenarios
 
@@ -289,6 +289,18 @@ For failures, also include:
 - Distinguish `FAILED-BUG` (assertion was reached and was false) from `FAILED-INFRA` (browser-use crash, timeout, network error before the assertion could run). Both fail the run, but the diagnostic differs.
 - Never write to `tests/e2e/` outside `playwright_target_dir`. Other Playwright tests are owned by the human or by test-creator.
 - Always validate the scenario-registry against the filesystem at the start of the run: if a graduated scenario's `playwright_path` is missing, BLOCK with "Registry drift: graduated scenario X claims playwright_path Y, file missing — reconcile."
+
+### Valid exit states (exhaustive — no other exit reasons permitted)
+
+These are the ONLY permitted exit states. Any condition not listed here MUST result in BLOCKED.
+
+- **PASS**: all included scenarios reached their Then clause and assertions passed. Exit 0.
+- **BLOCKED**: zero scenarios found / sidecar missing and parse failed / sidecar parse error / Pre-Run Setup failed after retries / registry drift / agent lacks tool access. Exit non-zero.
+- **DEFERRED**: sidecar was auto-scaffolded (Step 1 only — the sidecar didn't exist, was created with TODO markers, and the agent stopped). Exit non-zero. This is the ONLY valid DEFERRED reason.
+- **SKIPPED**: `.claude/no-acceptance` marker file present. Exit 0.
+- **FAILED**: one or more scenarios failed assertions (FAILED-BUG) or infrastructure (FAILED-INFRA), or leaked accounts were logged. Exit non-zero.
+
+"Covered by unit tests," "emulator stack not available," "no scenarios for this specific feature," and similar judgment calls are NEVER valid reasons to DEFER or SKIP. If the scenario directory has zero Given/When/Then blocks, the correct exit is BLOCKED, not DEFERRED. If emulators fail to start, the correct exit is BLOCKED (Pre-Run Setup failed), not DEFERRED.
 
 ### CLI-driver isolation rules (MANDATORY when `kind: cli`)
 
