@@ -37,6 +37,17 @@ fix-spec:
 
 In Mode B, derive test scenarios from the `fix-spec` fields. For `bug-fix`: tests describe the broken state (Given/When) and the correct state (Then) — they fail before the fix, pass after. For `design-tweak`: tests describe the intended target state — they fail before the tweak, pass after.
 
+## Known Failure Rules (read before writing tests)
+
+Before writing any tests, check for known failure rules relevant to this feature:
+
+1. Read `~/.claude/known-failures.md` (global) and `<cwd>/.claude/known-failures.md` (per-project, if it exists).
+2. Also check the task entry in FEATURE_PROMPTS.md for a "Known Failure Rules" section (carried forward from requirements-clarifier). If present, use it instead of re-reading the sidecars.
+3. For each matching rule, generate at least one regression test that verifies the prevention guidance is followed. For example, if a rule says "ensure all inputs have min font-size 16px," write a test that asserts no input has computed font-size below 16px.
+4. List which rules you matched in your output (**show-your-work**).
+
+If no sidecars exist and no "Known Failure Rules" section is in the task, skip silently.
+
 ## What You Do
 
 1. Read the target task from `docs/prompts/FEATURE_PROMPTS.md` (the task will be specified when you're invoked).

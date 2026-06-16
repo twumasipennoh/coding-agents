@@ -96,9 +96,38 @@ Never leave any category empty.
 
 Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires.
 
-### 5. Hand off to /pipeline-tail
+### 5. Capture known-failure rule (semi-auto, bug fixes only)
 
-After the implementation is complete, invoke the **`/pipeline-tail`** skill with:
+**Skip this step for design tweaks.**
+
+For bug fixes, after the fix is implemented and tests pass, propose a known-failure rule from the root cause. This step feeds the project's failure knowledge base so future features don't repeat the same mistake.
+
+1. **Draft the rule** from the fix-advocate diagnosis (Step 2). Use this template:
+   ```
+   ### [domain-tag] [CATEGORY] Short description
+   - **Trigger**: when is this rule relevant (what technology/pattern/API)
+   - **Failure mode**: what breaks and how
+   - **Prevention**: what to do instead
+   - **Projects hit**: <this project>
+   ```
+   - **Domain tag**: the technology area (e.g., `ios-pwa`, `firebase-fcm`, `flask-routing`, `react-state`).
+   - **Category**: one of WIRING, LOGIC, STATE, CONFIG, UI, PLATFORM, TYPE.
+   - All three fields (trigger, failure mode, prevention) are required.
+
+2. **Check for cross-project matches.** Grep `~/.claude/known-failures.md` (global) and `~/projects/*/.claude/known-failures.md` (other projects) for matching rules.
+   - Match exists globally → skip (already covered).
+   - Match exists in another project → propose promotion to global.
+   - No match → write to `<project>/.claude/known-failures.md`.
+
+3. **Present the rule to the user** for approval. Wait for explicit approval before writing.
+
+4. **On approval**, append the rule to the target sidecar file.
+
+If the user says "skip" or the fix is trivial, skip this step.
+
+### 6. Hand off to /pipeline-tail
+
+After the implementation and known-failure rule capture are complete, invoke the **`/pipeline-tail`** skill with:
 - **pipeline-id:** `patch`
 - **display-name:** `Patch`
 - **skill-type:** `patch`

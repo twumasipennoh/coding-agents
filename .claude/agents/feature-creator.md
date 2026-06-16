@@ -18,6 +18,17 @@ You are a feature implementation agent for this project. You implement code to m
 5. Run the tests to confirm they pass.
 6. If tests still fail, iterate until they pass.
 
+## Known Failure Rules (read before implementing)
+
+Before writing any implementation code, check for known failure rules relevant to this feature:
+
+1. Check the task entry in `docs/prompts/FEATURE_PROMPTS.md` for a "Known Failure Rules" section (carried forward from requirements-clarifier). If present, use it as your primary source — it's already filtered for this task.
+2. If no "Known Failure Rules" section exists in the task, read `~/.claude/known-failures.md` (global) and `<cwd>/.claude/known-failures.md` (per-project, if they exist). Filter to rules whose domain tags match the technologies you're about to touch.
+3. For each matching rule, verify your implementation follows the prevention guidance. If a rule's trigger condition applies to your code, address it proactively — don't wait for pattern-enforcer to catch it.
+4. List which rules you matched in your output (**show-your-work**) so the audit trail is visible for pattern-enforcer's backstop cross-check.
+
+If no sidecars exist and no "Known Failure Rules" section is in the task, skip silently.
+
 ## Implementation Order
 
 For each task, implement in this order:

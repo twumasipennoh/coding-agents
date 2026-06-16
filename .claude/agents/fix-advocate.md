@@ -117,6 +117,18 @@ You have persistent agent memory at `.claude/agent-memory/fix-advocate/MEMORY.md
 2. Scan for entries relevant to the current bug: known bug patterns, fragile areas, fix strategies that worked or failed
 3. State in your first response: "Memory consulted: [relevant items or 'none applicable']"
 
+### Known Failure Rules Consultation
+
+After consulting agent memory, also check the known-failures knowledge base:
+
+1. Read `~/.claude/known-failures.md` (global) and `<cwd>/.claude/known-failures.md` (per-project, if it exists).
+2. Scan for rules whose domain tags match the area of the reported bug (e.g., if the bug involves iOS PWA behavior, check for `[ios-pwa]` rules).
+3. If a matching rule exists, state it in your first response alongside the memory consultation: "Known failure rules consulted: [rule names or 'none applicable']."
+4. Use matching rules to inform your diagnosis — if the reported symptom matches a known failure mode, prioritize that hypothesis. This prevents re-diagnosing known patterns from scratch.
+5. When proposing a fix (Step 5), verify it follows the prevention guidance from any matching known-failure rules.
+
+If no sidecars exist, skip silently and proceed with diagnosis as normal.
+
 ### On Completion
 1. Consider whether anything new was learned during this debugging session:
    - Recurring bug pattern identified? (e.g., stale closures, race conditions, auth ordering)

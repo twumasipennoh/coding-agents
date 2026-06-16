@@ -65,9 +65,36 @@ Never leave any category empty for any layer.
 
 After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code.
 
-### 4. Hand off to /pipeline-tail
+### 4. Capture known-failure rule (semi-auto)
 
-After the fix is written, invoke the **`/pipeline-tail`** skill with:
+After the fix is implemented and tests pass, propose a known-failure rule from the root cause. This step feeds the project's failure knowledge base so future features don't repeat the same mistake.
+
+1. **Draft the rule** from the fix-advocate diagnosis (Step 1). Use this template:
+   ```
+   ### [domain-tag] [CATEGORY] Short description
+   - **Trigger**: when is this rule relevant (what technology/pattern/API)
+   - **Failure mode**: what breaks and how
+   - **Prevention**: what to do instead
+   - **Projects hit**: <this project>
+   ```
+   - **Domain tag**: the technology area (e.g., `ios-pwa`, `firebase-fcm`, `flask-routing`, `react-state`). Pick the most specific tag that applies.
+   - **Category**: one of WIRING, LOGIC, STATE, CONFIG, UI, PLATFORM, TYPE.
+   - All three fields (trigger, failure mode, prevention) are required. If you can't fill one, the rule isn't precise enough — rewrite.
+
+2. **Check for cross-project matches.** Before writing, grep `~/.claude/known-failures.md` (global) and `~/projects/*/.claude/known-failures.md` (other projects) for rules with matching domain tags or similar failure descriptions.
+   - If a matching rule already exists globally → skip writing (it's already covered).
+   - If a matching rule exists in another project's sidecar but not globally → propose promotion to global: "This pattern also hit [other project] — promoting to `~/.claude/known-failures.md`."
+   - If no match → write to `<project>/.claude/known-failures.md` (per-project).
+
+3. **Present the rule to the user** for approval. Show the rule and where it will be written (per-project or global). Wait for explicit approval before writing.
+
+4. **On approval**, append the rule to the target sidecar file. If the file doesn't exist, create it with the standard header from `~/.claude/known-failures.md`.
+
+If the user says "skip" or the fix is trivial (typo, copy change), skip this step.
+
+### 5. Hand off to /pipeline-tail
+
+After the fix is written and the known-failure rule is captured (or skipped), invoke the **`/pipeline-tail`** skill with:
 - **pipeline-id:** `bug-fix`
 - **display-name:** `Bug Fix`
 - **skill-type:** `fix`
