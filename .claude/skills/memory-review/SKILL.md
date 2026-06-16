@@ -25,13 +25,41 @@ Delegate to the **memory-curator** agent (`.claude/agents/memory-curator.md`).
 
 The full structured report is **opt-in only** — never lead with it. The curator's work isn't wasted; it's gated behind the ask. This applies to all `--quick` / `--stale` / `--candidates` / `--docs` variants too: summarize first, expand on request.
 
+## Failure Knowledge Audit Pass
+
+In addition to the standard memory-curator analysis, the full review includes a **failure knowledge** pass. This audits the known-failures knowledge base for health and effectiveness.
+
+### What it checks
+
+1. **Staleness**: rules that haven't been matched by any recent fix commit (check git log for fix/patch commits in the last 90 days and whether they map to existing rules). Flag rules older than 6 months with no recent match as potentially stale.
+2. **Deduplication**: rules in the global sidecar (`~/.claude/known-failures.md`) that overlap or could be consolidated. Rules in per-project sidecars that are effectively identical.
+3. **Cross-project promotion candidates**: rules in `<cwd>/.claude/known-failures.md` that also appear (same root cause, different wording) in another project's sidecar. Propose promotion to global.
+4. **Filtering accuracy**: compare recent fix/patch commits (last 30 days) against existing known-failure rules. If a fix landed for a failure mode that already had a rule, flag it as a filtering miss — the rule existed but wasn't surfaced during implementation. Track the miss rate.
+5. **Completeness**: check `docs/lessons.md` for entries that describe a generalizable failure pattern but haven't been promoted to a known-failures rule yet. Propose promotion.
+6. **Rule quality**: flag rules missing any of the three required fields (trigger, failure mode, prevention) as incomplete.
+
+### Output
+
+Include a `Failure Knowledge` section in the curator's report:
+```
+## Failure Knowledge
+- Rules: N global, M per-project
+- Stale (>6 months, no match): [list or "none"]
+- Duplicates: [list or "none"]
+- Promotion candidates: [list or "none"]
+- Filtering misses (last 30 days): [count] — [details]
+- Lessons → rules candidates: [list or "none"]
+- Incomplete rules: [list or "none"]
+```
+
 ## Arguments
 
-- `/memory-review` — Full review (default): capacity, promotion candidates, stale entries, consolidation, conflicts, project docs health, recommendations
+- `/memory-review` — Full review (default): capacity, promotion candidates, stale entries, consolidation, conflicts, project docs health, failure knowledge, recommendations
 - `/memory-review --quick` — Summary only: line counts, health status, top 3 candidates
 - `/memory-review --stale` — Focus on stale/outdated entries only
 - `/memory-review --candidates` — Show only promotion candidates (scored entries)
 - `/memory-review --docs` — Project docs health only: CLAUDE.md, DECISIONS.md, monitoring_spec.md analysis
+- `/memory-review --failures` — Failure knowledge audit only: staleness, dedup, promotion, filtering accuracy, completeness
 
 ## When to Use
 

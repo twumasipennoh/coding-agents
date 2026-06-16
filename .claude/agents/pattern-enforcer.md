@@ -95,9 +95,34 @@ If `<cwd>/.claude/design-tokens.md` is missing, treat the project as having no t
 
 For every H2 section in `<cwd>/.claude/patterns.md`, treat each bullet as a check item. Tag findings with the section name (kebab-cased).
 
+## Known-failure backstop cross-check
+
+After completing the standard review (universal + project-specific patterns), run a backstop cross-check against the known-failures knowledge base. This catches failure patterns that feature-creator may have missed during implementation.
+
+1. **Read both sidecars**: `~/.claude/known-failures.md` (global) and `<cwd>/.claude/known-failures.md` (per-project, if it exists). Read the full files — do not pre-filter.
+2. **Scan the changeset** for domain indicators: imports, file patterns, API calls, framework usage. Map these to the domain tags in the known-failures rules.
+3. **For each matching rule**, verify the changeset follows the prevention guidance. If it violates a known-failure rule, report it as a `[known-failure]` violation with the rule name and the specific prevention that wasn't followed.
+4. **Show-your-work**: list which rules matched and which were checked, even if compliant. This audit trail lets memory-review track filtering accuracy.
+
+If neither sidecar file exists, skip this step silently (no block, no error).
+
+### Generic wiring completeness check
+
+Independent of known-failures, verify these mechanical wiring patterns in every review:
+
+- [ ] New route/blueprint/endpoint → registered in the router/app factory/URL config
+- [ ] New public method on a wrapped/decorated class → delegation added to all wrappers
+- [ ] New field in API response → corresponding TypeScript/frontend type updated
+- [ ] New component/page → imported and rendered by a parent, reachable via router
+- [ ] New environment variable → added to `.env.example` or equivalent
+- [ ] New model/type field → included in serialization/deserialization (`from_dict`, `to_dict`, etc.)
+- [ ] DOM element with test selector → no stale references in existing test files
+
+Report wiring violations as `[wiring-completeness]` findings.
+
 ## How to Review
 
-1. Given specific files or a diff, check against universal rules + project-specific patterns.
+1. Given specific files or a diff, check against universal rules + project-specific patterns + known-failure backstop + wiring completeness.
 2. Given no scope, scan recently modified files.
 3. For each violation, report: pattern category, file:line, what it does vs. what it should do.
 

@@ -122,6 +122,9 @@ The approved mockups become the visual spec for Phases 3-5. Phase 3 should evalu
 **GATE: Pause after this phase and wait for user approval of the designs before proceeding.**
 
 ### Phase 3 — Evaluate
+
+**Known failure rules injection.** Before pressure-testing, read `~/.claude/known-failures.md` (global) and `<cwd>/.claude/known-failures.md` (per-project, if it exists). Scan the rules for any whose domain tags match the technologies/APIs this feature will touch. List the matching rules by name in your output (**show-your-work**) so the audit trail is visible. Surface relevant failure modes and prevention rules in the evaluation findings below — weave them into the appropriate sub-section (e.g., a `[firebase-fcm]` rule surfaces under "Speed and performance" or "Backwards compatibility" depending on its content). Carry the filtered rule list forward into FEATURE_PROMPTS.md under a "Known Failure Rules" section for the task, so downstream agents (feature-creator, test-creator) inherit them without re-reading the sidecars.
+
 Pressure-test the chosen approach:
 - Speed and performance implications
 - Space / storage requirements
