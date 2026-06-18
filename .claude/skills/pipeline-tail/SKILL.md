@@ -53,7 +53,7 @@ After Phase B completes (success or failure):
 for each gate that reported failure:
   attempt = 0
   while attempt < 3:
-    auto-fix the reported issues
+    auto-fix the reported issues (subject to Auto-Fix Constraints below)
     re-run the gate
     if gate passes: break
     attempt += 1
@@ -63,6 +63,29 @@ for each gate that reported failure:
 ```
 
 Gate retry counts are **independent** — each gate tracks its own retry count. If auto-fixing one gate introduces a failure in another gate, that other gate gets its own 3 retries.
+
+### Auto-Fix Constraints (MANDATORY — applies to all retry attempts)
+
+When auto-fixing test-runner failures, you MUST follow these rules based on the failure classification from test-runner's output:
+
+**By classification:**
+- **REGRESSION** failures (tests that were passing before our changes): fix the APPLICATION CODE to make the test pass. The test caught a real bug in our changes. Do NOT modify the test.
+- **NEW-FAILING** failures (test-creator's tests for the new feature/fix): fix the APPLICATION CODE to satisfy the test contract. These tests define what the implementation should do. Do NOT modify the test.
+- **PRE-EXISTING** failures (tests already broken before our branch): do NOT fix these. They aren't caused by our changes. Note them in the GATES log as "PRE-EXISTING: X failures (not caused by this branch)" and exclude them from the gate pass/fail decision.
+- **UNCLASSIFIED** failures (no baseline available): treat as REGRESSION — fix the application code, not the test.
+
+**Hard rules (never violate):**
+- **NEVER** add `.skip()`, `.todo()`, `xit()`, `xdescribe()`, `@pytest.mark.skip`, `@unittest.skip`, or any test-skipping annotation as an auto-fix.
+- **NEVER** weaken, loosen, or delete a test assertion to make it pass. If `expect(x).toBe(5)` fails because `x` is `3`, the fix is making the code produce `5`, not changing the assertion to `toBe(3)`.
+- **NEVER** delete a test file or test case as an auto-fix.
+- **NEVER** wrap a failing assertion in a try/catch that swallows the error.
+- **IF a test is genuinely wrong** (bad assertion logic, not a code bug — e.g., the test asserts a wrong HTTP status code that was never correct): you MAY fix the test, but MUST include a one-line comment explaining why the test was wrong (e.g., `// was asserting 201 but this endpoint returns 200 per the route definition`). This is the ONLY permitted test modification, and it requires the comment.
+
+**Diagnosis before fix:** Before writing any auto-fix code, classify the failure:
+1. Read the failing test's assertion and the code it tests.
+2. Determine: is the test correct and the code wrong? Or is the test wrong?
+3. In >95% of cases, the test is correct and the code is wrong. Default to fixing application code.
+4. If you believe the test is wrong, state your reasoning in a one-line note before modifying it.
 
 After all gates in Phase A pass, proceed to Phase B. After all gates pass, proceed to Step 2.
 

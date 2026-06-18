@@ -45,11 +45,24 @@ One sub-section per dependency. Each block has:
 For each pre-test dependency, the cleanup command. Always runs on success AND failure.
 ```
 
+## Baseline Comparison (when provided)
+
+The calling skill may provide a baseline file at `.claude/state/test-baseline-<branch>.json`. This file contains test results captured BEFORE implementation began (on the same branch, immediately after branching from main). When a baseline exists:
+
+1. **Load baseline** at step 3 (after running tests). Parse the JSON: `{ "failing": ["test.name.one", "test.name.two"], "timestamp": "...", "branch": "..." }`.
+2. **Classify each failure** in the current run:
+   - Test name appears in `baseline.failing` → **PRE-EXISTING** (was already broken before our changes)
+   - Test name does NOT appear in `baseline.failing` AND the test file was created by test-creator in this pipeline run → **NEW-FAILING** (test-creator's test that implementation should satisfy)
+   - Test name does NOT appear in `baseline.failing` AND the test file existed before this pipeline run → **REGRESSION** (our changes likely broke this)
+3. **Report classifications** in the output (see Output Format below).
+
+If no baseline file exists, classify all failures as `UNCLASSIFIED` and note: "No baseline available — cannot distinguish pre-existing from regression."
+
 ## Workflow
 
 1. Read `test-commands.md`. If missing, BLOCK.
 2. If `## Pre-Test Setup` is defined, run each setup. On port conflict, follow `conflict_action`.
-3. Run each `## Layers` layer in order. Capture pass/fail/skip counts and failures.
+3. Run each `## Layers` layer in order. Capture pass/fail/skip counts and failures. If a baseline file exists, classify failures per "Baseline Comparison" above.
 4. Evaluate `## E2E Coverage Gate` if defined:
    - Take the changeset (`git diff --name-only` against base ref or last commit).
    - If any file matches `ui_globs` AND zero tests ran in the e2e layer, BLOCK with `block_message`.
@@ -67,13 +80,29 @@ Test Results:
   Total:     XX passed, XX failed
   Duration:  Xs
 
+Failure Classification (baseline: <present|absent>):
+  REGRESSION (XX):
+    - <test name> — <file:line> — <assertion message>
+  NEW-FAILING (XX):
+    - <test name> — <file:line> — <assertion message>
+  PRE-EXISTING (XX):
+    - <test name> — <file:line> — <assertion message>
+
+Gate-blocking failures: XX REGRESSION + XX NEW-FAILING (PRE-EXISTING excluded)
+
 E2E Gate: ✅ PASS / ❌ BLOCKED — <reason> / ⏭️ SKIPPED (no e2e layer defined)
 ```
 
-For failures, include:
+**Classification rules for the auto-fix loop:**
+- **REGRESSION** and **NEW-FAILING** failures count as gate-blocking. The pipeline must fix these before proceeding.
+- **PRE-EXISTING** failures are reported but do NOT block the gate. They existed before our branch.
+- If no baseline exists, all failures are **UNCLASSIFIED** and treated as gate-blocking (safe default).
+
+For all failures, include:
 - Test name
 - File path and line number
 - One-line error / assertion message
+- Classification tag: `[REGRESSION]`, `[NEW-FAILING]`, `[PRE-EXISTING]`, or `[UNCLASSIFIED]`
 
 ## Rules
 - Do NOT fix code. Only report results.

@@ -27,6 +27,21 @@ If already on a non-base branch, stay on it and log: "Using existing branch <nam
 
 This must happen **before any implementation work** — all code changes must land on the feature branch, not on main.
 
+### Step 0d — Test Baseline Snapshot
+
+Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
+
+1. Read `.claude/test-commands.md` to get the test layer commands.
+2. Run each test layer and collect the names of any failing tests.
+3. Write the baseline to `.claude/state/test-baseline-<branch-name>.json`:
+   ```json
+   { "failing": ["test.name.one", "test.name.two"], "timestamp": "<ISO>", "branch": "<branch>" }
+   ```
+4. If all tests pass, write `{ "failing": [], "timestamp": "...", "branch": "..." }`.
+5. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED).
+
+This step is non-blocking — pre-existing failures are recorded, not fixed. They'll be excluded from the gate in pipeline-tail.
+
 ### Step 1 — Pre-Flight Validation
 Run the **pre-flight** agent to verify the project is in a clean state:
 - Test suite health (BLOCKING if tests fail)
@@ -39,7 +54,7 @@ If pre-flight reports **BLOCKING** issues, fix them before proceeding. If **WARN
 ### Step 2 — Write Failing Tests
 Run the **test-creator** agent -> reads the task spec from `FEATURE_PROMPTS.md`, writes failing tests based on "Tests to Write First."
 
-**Acceptance scenario checkpoint (BLOCKING):** Before proceeding to Step 3, verify that test-creator wrote at least one acceptance scenario (Given/When/Then file in `tests/acceptance/scenarios/` or equivalent per the project's `.claude/acceptance-config.md` Scenario Source). If acceptance scenarios are missing, re-invoke test-creator with an explicit directive to write the acceptance layer. Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
+**Acceptance scenario checkpoint (BLOCKING):** Before proceeding to Step 3, verify that test-creator produced acceptance scenarios by checking test-creator's output summary for the `Acceptance scenarios:` line. If that line is absent, OR if running `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` returns empty, re-invoke test-creator with this explicit directive: "You exited without acceptance scenarios. Write Given/When/Then scenarios for this feature in `tests/acceptance/scenarios/<feature-slug>.md` per your Phase 4 section. This is BLOCKING." Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
 
 ### Step 3 — Implement Feature
 Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps."

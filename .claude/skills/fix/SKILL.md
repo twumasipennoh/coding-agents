@@ -25,6 +25,21 @@ If already on a non-base branch, stay on it and log: "Using existing branch <nam
 
 This must happen **before any implementation work** — all code changes must land on the fix branch, not on main.
 
+### 0b. Test Baseline Snapshot
+
+Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
+
+1. Read `.claude/test-commands.md` to get the test layer commands.
+2. Run each test layer and collect the names of any failing tests.
+3. Write the baseline to `.claude/state/test-baseline-<branch-name>.json`:
+   ```json
+   { "failing": ["test.name.one", "test.name.two"], "timestamp": "<ISO>", "branch": "<branch>" }
+   ```
+4. If all tests pass, write `{ "failing": [], "timestamp": "...", "branch": "..." }`.
+5. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED).
+
+This step is non-blocking — pre-existing failures are recorded, not fixed. They'll be excluded from the gate in pipeline-tail.
+
 ### 1. Run fix-advocate — diagnosis (BLOCKING)
 
 Invoke the **fix-advocate** agent and complete all 6 diagnosis steps:
@@ -59,7 +74,7 @@ fix-spec:
 
 Never leave any category empty for any layer.
 
-**Acceptance-test checkpoint (BLOCKING):** Before proceeding, verify that test-creator produced at least one acceptance-layer test file. If acceptance tests are missing, re-invoke test-creator with an explicit directive to write the acceptance layer. Do NOT proceed to implementation with only unit/integration tests.
+**Acceptance scenario checkpoint (BLOCKING):** Before proceeding, verify that test-creator produced acceptance scenarios by checking test-creator's output summary for the `Acceptance scenarios:` line. If that line is absent, OR if running `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` returns empty, re-invoke test-creator with this explicit directive: "You exited without acceptance scenarios. Write Given/When/Then scenarios for this fix in `tests/acceptance/scenarios/<fix-slug>.md` per your Phase 4 section. This is BLOCKING." Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
 
 ### 3. Write fix code (only after tests are confirmed failing)
 

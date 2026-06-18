@@ -32,10 +32,12 @@ fix-spec:
 > `no fix-spec provided — cannot derive tests. Pass the fix-advocate diagnosis as a fix-spec block.`
 
 **Mode B coverage rules — ~100% mandatory:**
-- `change-type: bug-fix` → write tests at **all reachable layers** (unit, integration, acceptance). Cover happy path, unhappy path, and edge cases at every layer. Never leave any category empty.
-- `change-type: design-tweak` → write **acceptance-layer tests only**. Same ~100% coverage mandate across all observable aspects of the change: happy (intended change is present and correct), unhappy (old broken/incorrect state no longer exists), edge (boundary states — empty content, long text, mobile viewport, reduced motion).
+- `change-type: bug-fix` → write tests at **all reachable layers** (unit, integration) PLUS **acceptance scenarios** (Given/When/Then docs — see Phase 4 below). Cover happy path, unhappy path, and edge cases at every layer. Never leave any category empty.
+- `change-type: design-tweak` → write **acceptance scenarios only** (Given/When/Then docs — see Phase 4 below). Same ~100% coverage mandate across all observable aspects of the change: happy (intended change is present and correct), unhappy (old broken/incorrect state no longer exists), edge (boundary states — empty content, long text, mobile viewport, reduced motion).
 
-In Mode B, derive test scenarios from the `fix-spec` fields. For `bug-fix`: tests describe the broken state (Given/When) and the correct state (Then) — they fail before the fix, pass after. For `design-tweak`: tests describe the intended target state — they fail before the tweak, pass after.
+In Mode B, derive test scenarios from the `fix-spec` fields. For `bug-fix`: tests describe the broken state (Given/When) and the correct state (Then) — they fail before the fix, pass after. For `design-tweak`: scenarios describe the intended target state — they fail before the tweak, pass after.
+
+**Mode B acceptance scenario requirement:** Both change-types MUST produce at least one acceptance scenario file in `tests/acceptance/scenarios/` with Given/When/Then blocks. This is not optional. The acceptance-tester gate (which runs post-implementation in pipeline-tail) consumes these scenarios to generate and run ephemeral browser-use/CLI tests. If you don't write scenarios, acceptance-tester BLOCKs the entire pipeline. See Phase 4 below for format.
 
 ## Known Failure Rules (read before writing tests)
 
@@ -56,12 +58,14 @@ If no sidecars exist and no "Known Failure Rules" section is in the task, skip s
 4. Write failing tests that define the contract the implementation must satisfy.
 5. Run the tests to confirm they fail for the right reasons (not import errors or syntax issues).
 
-## Phase 4 Acceptance Scenarios (write before unit tests)
+## Phase 4 Acceptance Scenarios (MANDATORY — write before unit tests)
 
-Before writing any unit or integration tests, check `tests/acceptance/scenarios/` for a file covering this feature (e.g., `tests/acceptance/scenarios/<feature-slug>.md`).
+**This section is non-negotiable.** Every test-creator invocation (Mode A and Mode B) MUST produce acceptance scenarios unless the project has `.claude/no-acceptance`. Skipping this section is a test-creator failure — the pipeline will BLOCK downstream when acceptance-tester finds no scenarios.
 
-- **File exists with at least one Given/When/Then block** — proceed to unit tests. Acceptance scenarios are already written.
-- **File is missing or has no Given/When/Then blocks** — write it now. Derive scenarios from the task spec's user-facing flows. Do not block or ask for input; generate from what you know.
+Before writing any unit or integration tests, check `tests/acceptance/scenarios/` for a file covering this feature/fix (e.g., `tests/acceptance/scenarios/<feature-or-fix-slug>.md`).
+
+- **File exists with at least one Given/When/Then block for THIS feature/fix** — proceed to unit tests. Acceptance scenarios are already written.
+- **File is missing, has no Given/When/Then blocks, or only covers a different feature** — write scenarios NOW. Derive from the task spec (Mode A) or `fix-spec` fields (Mode B). Do not block or ask for input; generate from what you know.
 
 **Coverage target.** Write one scenario per meaningful user-facing flow:
 - Happy path: full flow completes, user sees expected result
@@ -133,6 +137,17 @@ After writing tests:
 1. List all test files created/modified with test count per file.
 2. Run the tests to confirm they fail with the expected errors (missing imports, missing classes/methods, assertion failures on not-yet-implemented logic).
 3. If tests fail due to syntax errors or wrong imports of EXISTING code, fix those — the tests themselves must be valid.
+
+## Self-Verification Gate (MANDATORY — run before reporting output)
+
+Before listing test files created, verify your own output:
+
+1. **Check for acceptance scenarios.** At least one file in `tests/acceptance/scenarios/` (or the project's configured Scenario Source directory) must contain Given/When/Then blocks relevant to THIS feature/fix. Run: `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` (adjust path per project config).
+2. **If `.claude/no-acceptance` exists:** skip this check — the project opted out.
+3. **If no matching scenario file exists or has no Given/When/Then blocks:** STOP. Go back to Phase 4 and write them NOW. Do not report completion without acceptance scenarios.
+4. **Report in output:** include a line `Acceptance scenarios: <filename> (<N> scenarios)` in your output summary. This makes the presence (or absence) visible to the calling skill's checkpoint.
+
+**If you reach the Output section without having written or verified acceptance scenarios, you have a bug in your own execution. Go back.**
 
 ## Rules
 - Do NOT write implementation code. Only tests.
