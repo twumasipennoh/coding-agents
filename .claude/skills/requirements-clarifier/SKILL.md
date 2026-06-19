@@ -161,19 +161,30 @@ Define use cases to verify the implementation as Given/When/Then scenarios. Buil
 - **Integration** — cross-component behavior, repo/DB layer, mocked external services. Unhappy = service returns 4xx/5xx, DB write fails, timeout, auth token rejected. Edge = idempotency (same call twice), partial data, concurrent writes.
 - **E2E / Acceptance** — full user-facing flow. Unhappy = form with missing/invalid fields, session expired mid-flow, network error, permission denied. Edge = very long content, back-navigation mid-flow, deep links into protected pages, concurrent sessions.
 
-**Scenario format.** Use Given/When/Then for every scenario, tagged with its layer:
+**Scenario format — compact one-liners (default).** Each scenario is a single line: `[Layer|Cat] trigger → expected outcome`. Layer = `Unit`, `Int`, `E2E`. Category = `H` (happy), `U` (unhappy), `E` (edge). Group scenarios by **functional path** (the thing the user does), not by layer — this lets you verify "did we cover all the ways X can break?" by reading one block, instead of jumping between three layer sections.
 
 ```
-[Unit] Given a createUser function and an email without @
-When called
-Then it throws ValidationError("invalid email")
+**Create schedule**
+- [Unit|H] valid input → schedule object with correct defaults
+- [Unit|U] missing title → ValidationError("title required")
+- [Unit|E] title at max length (255) → accepted, no truncation
+- [Int|H] save → persisted to Firestore, ID returned
+- [Int|U] Firestore write fails → error surfaced, no partial state
+- [Int|E] duplicate save → idempotent, same ID, no duplicate doc
+- [E2E|H] fill form, submit → schedule appears in list view
+- [E2E|U] submit with empty title → inline validation, no navigation
+- [E2E|E] 255-char title → truncated in list, full in detail view
 ```
+
+**Coverage tally.** Open Phase 4 output with a one-line summary: `N scenarios: X unit (aH bU cE), Y integration (dH eU fE), Z e2e (gH hU iE)`. This lets you verify distribution at a glance before reading the scenarios.
+
+**Drill-down on request.** If the user asks for full Given/When/Then on any scenario (or says "expand," "full GWT," "show me the details"), expand those specific scenarios into multi-line GWT. Don't expand all of them unprompted.
 
 For any e2e-unreachable seam identified in Phase 3, include explicit manual QA steps as a checklist — never stay silent.
 
 **GATE: Pause after this phase and wait for user sign-off before proceeding.**
 
-**After user sign-off:** extract the E2E / Acceptance-layer scenarios from this phase and write them to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). Use the exact Given/When/Then format the acceptance-tester parses — do not summarize or paraphrase the scenarios. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
+**After user sign-off:** extract the E2E / Acceptance-layer scenarios from this phase and expand them into full Given/When/Then format, then write to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). The acceptance-tester parser requires multi-line GWT — the compact one-liners are for human review only. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
 
 ### Phase 5 — Plan
 Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If mockups were approved, reference them as the visual spec. Fold in the test scenarios from Phase 4 as the acceptance criterion.
