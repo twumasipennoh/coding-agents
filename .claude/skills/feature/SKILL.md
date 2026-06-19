@@ -32,13 +32,24 @@ This must happen **before any implementation work** — all code changes must la
 Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
 
 1. Read `.claude/test-commands.md` to get the test layer commands.
-2. Run each test layer and collect the names of any failing tests.
+2. Run **ALL** test layers defined in `test-commands.md` (unit, integration, e2e, acceptance — every layer listed under `## Layers`). Do NOT skip any layer. Collect the names of any failing tests per layer.
 3. Write the baseline to `.claude/state/test-baseline-<branch-name>.json`:
    ```json
-   { "failing": ["test.name.one", "test.name.two"], "timestamp": "<ISO>", "branch": "<branch>" }
+   {
+     "failing_by_layer": {
+       "core unit": ["test.name.one"],
+       "e2e": ["test.name.two"]
+     },
+     "layers_run": ["core unit", "web unit", "e2e"],
+     "timestamp": "<ISO>",
+     "branch": "<branch>"
+   }
    ```
-4. If all tests pass, write `{ "failing": [], "timestamp": "...", "branch": "..." }`.
-5. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED).
+   - `failing_by_layer`: map of layer name → array of failing test names. Omit layers with zero failures.
+   - `layers_run`: every layer that was executed (including those with zero failures). This is the completeness proof.
+4. If all tests pass across all layers, write `{ "failing_by_layer": {}, "layers_run": ["...all layers..."], "timestamp": "...", "branch": "..." }`.
+5. **Validation**: compare `layers_run` against the layers defined in `test-commands.md`. If any defined layer is missing from `layers_run`, the baseline is incomplete — re-run the missing layer(s) before proceeding.
+6. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED).
 
 This step is non-blocking — pre-existing failures are recorded, not fixed. They'll be excluded from the gate in pipeline-tail.
 

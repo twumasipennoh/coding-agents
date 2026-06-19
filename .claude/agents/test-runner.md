@@ -49,12 +49,21 @@ For each pre-test dependency, the cleanup command. Always runs on success AND fa
 
 The calling skill may provide a baseline file at `.claude/state/test-baseline-<branch>.json`. This file contains test results captured BEFORE implementation began (on the same branch, immediately after branching from main). When a baseline exists:
 
-1. **Load baseline** at step 3 (after running tests). Parse the JSON: `{ "failing": ["test.name.one", "test.name.two"], "timestamp": "...", "branch": "..." }`.
+1. **Load baseline** at step 3 (after running tests). Parse the JSON — the baseline uses a per-layer format:
+   ```json
+   {
+     "failing_by_layer": { "<layer>": ["test.name.one"], ... },
+     "layers_run": ["<layer1>", "<layer2>", ...],
+     "timestamp": "...", "branch": "..."
+   }
+   ```
+   To build the flat set of all pre-existing failures, collect all test names across all values in `failing_by_layer`. Legacy baselines with a flat `"failing": [...]` array are also accepted — use the array directly.
 2. **Classify each failure** in the current run:
-   - Test name appears in `baseline.failing` → **PRE-EXISTING** (was already broken before our changes)
-   - Test name does NOT appear in `baseline.failing` AND the test file was created by test-creator in this pipeline run → **NEW-FAILING** (test-creator's test that implementation should satisfy)
-   - Test name does NOT appear in `baseline.failing` AND the test file existed before this pipeline run → **REGRESSION** (our changes likely broke this)
-3. **Report classifications** in the output (see Output Format below).
+   - Test name appears in the baseline's failing set → **PRE-EXISTING** (was already broken before our changes)
+   - Test name does NOT appear in the baseline's failing set AND the test file was created by test-creator in this pipeline run → **NEW-FAILING** (test-creator's test that implementation should satisfy)
+   - Test name does NOT appear in the baseline's failing set AND the test file existed before this pipeline run → **REGRESSION** (our changes likely broke this)
+3. **Layer coverage check**: if `layers_run` exists in the baseline, compare it against the layers defined in `test-commands.md`. If the baseline is missing a layer, note it: "Baseline did not cover layer `<name>` — failures in that layer classified as UNCLASSIFIED." Classify failures in uncovered layers as UNCLASSIFIED (safe default).
+4. **Report classifications** in the output (see Output Format below).
 
 If no baseline file exists, classify all failures as `UNCLASSIFIED` and note: "No baseline available — cannot distinguish pre-existing from regression."
 
