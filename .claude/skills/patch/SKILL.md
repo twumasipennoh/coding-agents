@@ -59,30 +59,54 @@ Determine whether this is a **bug fix** or a **design tweak**:
 
 State your classification and proceed.
 
-### 2. Diagnosis gate (bug fixes only)
+### 2. Expected behavior (BLOCKING)
+
+**Bug fix path:** Before any code reading or diagnosis, understand what the user expects:
+
+1. **What did you expect to happen?** — Ask the user to describe the correct behavior they expected.
+2. **How would you ideally want this to work?** — Ask how the feature should behave if working correctly.
+
+If the user's description reveals this isn't a bug but a missing feature or design gap, flag it explicitly: "This sounds like a feature request rather than a bug fix — consider running `/feature` instead." Wait for the user to confirm direction before proceeding.
+
+**Design tweak path:** Understand the visual/behavioral target:
+
+1. **What should this look like?** — Ask the user to describe the intended visual or behavioral result.
+2. **Mockup?** — If the tweak is non-trivial (layout change, new component state, multi-element adjustment), offer to run `/mockup` to generate a visual target before implementation. If trivial (copy change, single color swap, spacing adjustment), skip.
+
+**STOP here. Wait for the user's answers (and mockup approval if applicable) before proceeding.**
+
+### 3. Diagnosis gate (bug fixes only)
 
 **Skip this step entirely for design tweaks.**
 
-For bug fixes, invoke the **fix-advocate** agent and complete all 6 diagnosis steps:
+For bug fixes, invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
 
 1. **Reproduce** — Confirm the bug is reproducible.
 2. **Locate** — Find the file(s) and line(s) where the bug originates.
-3. **Root cause** — Explain what is actually happening and why.
+3. **Root cause** — Explain what is actually happening and why, anchored against the user's expected behavior from Step 2.
 4. **Impact** — Describe what is affected (data, UX, security, performance).
-5. **Propose fix** — Write a specific, minimal fix with rationale.
-6. **Defend** — Explain why this fix is correct and won't cause regressions.
+5. **Sibling sweep & robustness check** — Search for similar patterns across the codebase:
+   - **Syntactic**: grep the current project for the same code pattern that caused the bug.
+   - **Semantic**: grep for the same category of mistake (e.g., if root cause is a missing null check, search for other unchecked nulls in the same flow).
+   - **Cross-project**: grep `~/projects/*` for the same pattern. Flag matches with risk notes — don't fix them. Note if any other project solved the same problem in a better way.
+   - **Robustness**: regardless of sibling count, evaluate whether the proposed fix covers all paths that could expose the same class of failure through different routes.
+   - If 5+ siblings exist in the current project, list the count with per-sibling risk assessment ("low: dead code path" vs "high: user-facing, same trigger as reported bug") and let the user decide whether to fix all now or defer some.
+   - Current-project siblings: the proposed fix must cover all of them (unless the user explicitly defers at the 5+ threshold).
+   - Cross-project matches: flagged with risk notes in the diagnosis output, not fixed.
+6. **Propose fix** — Write a specific fix with rationale that covers the reported bug AND all current-project siblings identified in step 5. Describe the change without implementing it yet.
+7. **Defend** — Explain why this fix is correct and won't cause regressions.
 
-**STOP. Present the diagnosis to the user and wait for explicit approval before proceeding.**
+**STOP. Present the diagnosis to the user — including sibling findings, cross-project flags, and robustness assessment — and wait for explicit approval before proceeding.**
 
-### 3. Write failing tests (BLOCKING — before any implementation)
+### 4. Write failing tests (BLOCKING — before any implementation)
 
 **Bug fix path:** Construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
 
 ```
 fix-spec:
   root-cause: <from fix-advocate step 3>
-  affected-paths: <from fix-advocate step 2 — files and functions>
-  proposed-change: <from fix-advocate step 5>
+  affected-paths: <from fix-advocate step 2 — files and functions, plus siblings from step 5>
+  proposed-change: <from fix-advocate step 6>
   change-type: bug-fix
 ```
 
@@ -105,7 +129,7 @@ Never leave any category empty for any layer.
 fix-spec:
   root-cause: N/A (design tweak)
   affected-paths: <files that will be changed>
-  proposed-change: <description of the intended visual/behavioral target state>
+  proposed-change: <description of the intended visual/behavioral target state, informed by user's description from Step 2 and mockup if generated>
   change-type: design-tweak
 ```
 
@@ -118,17 +142,17 @@ fix-spec:
 
 Never leave any category empty.
 
-### 4. Implement
+### 5. Implement
 
-Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires.
+Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires. For bug fixes, the implementation must cover all current-project siblings approved in Step 3.
 
-### 5. Capture known-failure rule (semi-auto, bug fixes only)
+### 6. Capture known-failure rule (semi-auto, bug fixes only)
 
 **Skip this step for design tweaks.**
 
 For bug fixes, after the fix is implemented and tests pass, propose a known-failure rule from the root cause. This step feeds the project's failure knowledge base so future features don't repeat the same mistake.
 
-1. **Draft the rule** from the fix-advocate diagnosis (Step 2). Use this template:
+1. **Draft the rule** from the fix-advocate diagnosis (Step 3). Use this template:
    ```
    ### [domain-tag] [CATEGORY] Short description
    - **Trigger**: when is this rule relevant (what technology/pattern/API)
@@ -151,7 +175,7 @@ For bug fixes, after the fix is implemented and tests pass, propose a known-fail
 
 If the user says "skip" or the fix is trivial, skip this step.
 
-### 6. Hand off to /pipeline-tail
+### 7. Hand off to /pipeline-tail
 
 After the implementation and known-failure rule capture are complete, invoke the **`/pipeline-tail`** skill with:
 - **pipeline-id:** `patch`
@@ -163,7 +187,8 @@ The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-upd
 **Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Notes
-- For bug fixes: do NOT write code before fix-advocate diagnosis + user approval.
+- For bug fixes: do NOT write code before Expected behavior gate (Step 2) + fix-advocate diagnosis (Step 3) + user approval.
 - For bug fixes: do NOT write code before test-creator confirms failing tests exist — hard sequencing gate.
-- For design tweaks: do NOT implement before test-creator confirms acceptance tests exist and are failing.
+- For design tweaks: do NOT implement before Expected behavior gate (Step 2) confirms visual target + test-creator confirms acceptance tests exist.
 - If the user explicitly says "skip gates" or "no gates", respect that and only implement.
+- The fix must cover all current-project siblings identified in the sibling sweep, unless the user explicitly deferred some at the 5+ threshold.
