@@ -51,28 +51,47 @@ Capture the current test suite state BEFORE any implementation begins. This base
 
 This step is non-blocking — pre-existing failures are recorded, not fixed. They'll be excluded from the gate in pipeline-tail.
 
-### 1. Run fix-advocate — diagnosis (BLOCKING)
+### 1. Expected behavior (BLOCKING)
 
-Invoke the **fix-advocate** agent and complete all 6 diagnosis steps:
+Before any code reading or diagnosis, understand what the user expects:
+
+1. **What did you expect to happen?** — Ask the user to describe the correct behavior they expected when they encountered the bug.
+2. **How would you ideally want this to work?** — Ask how the feature should behave if working correctly.
+
+If the user's description reveals this isn't a bug but a missing feature or design gap, flag it explicitly: "This sounds like a feature request rather than a bug fix — consider running `/feature` instead." Wait for the user to confirm direction before proceeding.
+
+**STOP here. Wait for the user's answers before proceeding to diagnosis.**
+
+### 2. Run fix-advocate — diagnosis (BLOCKING)
+
+Invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
 
 1. **Reproduce** — Confirm the bug is reproducible. Identify the exact failure condition.
 2. **Locate** — Find the file(s) and line(s) where the bug originates.
-3. **Root cause** — Explain what is actually happening and why.
+3. **Root cause** — Explain what is actually happening and why, anchored against the user's expected behavior from Step 1.
 4. **Impact** — Describe what is affected (data, UX, security, performance).
-5. **Propose fix** — Write a specific, minimal fix with rationale. Describe the change without implementing it yet.
-6. **Defend** — Explain why this fix is correct and won't cause regressions.
+5. **Sibling sweep & robustness check** — Search for similar patterns across the codebase:
+   - **Syntactic**: grep the current project for the same code pattern that caused the bug.
+   - **Semantic**: grep for the same category of mistake (e.g., if root cause is a missing null check, search for other unchecked nulls in the same flow).
+   - **Cross-project**: grep `~/projects/*` for the same pattern. Flag matches with risk notes — don't fix them. Note if any other project solved the same problem in a better way.
+   - **Robustness**: regardless of sibling count, evaluate whether the proposed fix covers all paths that could expose the same class of failure through different routes.
+   - If 5+ siblings exist in the current project, list the count with per-sibling risk assessment ("low: dead code path" vs "high: user-facing, same trigger as reported bug") and let the user decide whether to fix all now or defer some.
+   - Current-project siblings: the proposed fix must cover all of them (unless the user explicitly defers at the 5+ threshold).
+   - Cross-project matches: flagged with risk notes in the diagnosis output, not fixed.
+6. **Propose fix** — Write a specific fix with rationale that covers the reported bug AND all current-project siblings identified in step 5. Describe the change without implementing it yet.
+7. **Defend** — Explain why this fix is correct and won't cause regressions.
 
-**STOP here. Present the diagnosis to the user and wait for explicit approval before proceeding.**
+**STOP here. Present the diagnosis to the user — including sibling findings, cross-project flags, and robustness assessment — and wait for explicit approval before proceeding.**
 
-### 2. Write failing tests (only after approval, BLOCKING)
+### 3. Write failing tests (only after approval, BLOCKING)
 
 After the user approves, construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
 
 ```
 fix-spec:
   root-cause: <from fix-advocate step 3>
-  affected-paths: <from fix-advocate step 2 — files and functions>
-  proposed-change: <from fix-advocate step 5>
+  affected-paths: <from fix-advocate step 2 — files and functions, plus siblings from step 5>
+  proposed-change: <from fix-advocate step 6>
   change-type: bug-fix
 ```
 
@@ -87,15 +106,15 @@ Never leave any category empty for any layer.
 
 **Acceptance scenario checkpoint (BLOCKING):** Before proceeding, verify that test-creator produced acceptance scenarios by checking test-creator's output summary for the `Acceptance scenarios:` line. If that line is absent, OR if running `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` returns empty, re-invoke test-creator with this explicit directive: "You exited without acceptance scenarios. Write Given/When/Then scenarios for this fix in `tests/acceptance/scenarios/<fix-slug>.md` per your Phase 4 section. This is BLOCKING." Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
 
-### 3. Write fix code (only after tests are confirmed failing)
+### 4. Write fix code (only after tests are confirmed failing)
 
-After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code.
+After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code. The fix must cover all current-project siblings approved in Step 2.
 
-### 4. Capture known-failure rule (semi-auto)
+### 5. Capture known-failure rule (semi-auto)
 
 After the fix is implemented and tests pass, propose a known-failure rule from the root cause. This step feeds the project's failure knowledge base so future features don't repeat the same mistake.
 
-1. **Draft the rule** from the fix-advocate diagnosis (Step 1). Use this template:
+1. **Draft the rule** from the fix-advocate diagnosis (Step 2). Use this template:
    ```
    ### [domain-tag] [CATEGORY] Short description
    - **Trigger**: when is this rule relevant (what technology/pattern/API)
@@ -118,7 +137,7 @@ After the fix is implemented and tests pass, propose a known-failure rule from t
 
 If the user says "skip" or the fix is trivial (typo, copy change), skip this step.
 
-### 5. Hand off to /pipeline-tail
+### 6. Hand off to /pipeline-tail
 
 After the fix is written and the known-failure rule is captured (or skipped), invoke the **`/pipeline-tail`** skill with:
 - **pipeline-id:** `bug-fix`
@@ -130,7 +149,8 @@ The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-upd
 **Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Notes
-- Do NOT write any fix code before fix-advocate completes Steps 1-6 AND the user explicitly approves.
+- Do NOT write any fix code before the Expected behavior gate (Step 1) AND fix-advocate diagnosis (Step 2) are complete AND the user explicitly approves.
 - Do NOT write fix code before test-creator confirms failing tests exist — this is a hard sequencing gate.
-- If the user says "just fix it", still run fix-advocate first — this is non-negotiable.
+- If the user says "just fix it", still run Expected behavior + fix-advocate first — this is non-negotiable.
 - Keep the fix minimal. Resist the urge to clean up surrounding code.
+- The fix must cover all current-project siblings identified in the sibling sweep, unless the user explicitly deferred some at the 5+ threshold.
