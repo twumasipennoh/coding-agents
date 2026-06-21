@@ -60,22 +60,23 @@ After ANY correction from the user, record the pattern in `docs/lessons.md` (cre
 
 ## NON-NEGOTIABLE GATES (BLOCKING)
 
-After ANY code changes -- whether via `/feature`, feature-implementer, direct implementation, or bug fix -- these 5 agents MUST run before presenting work as complete. No exceptions.
+After ANY code changes -- whether via `/feature`, feature-implementer, direct implementation, or bug fix -- these 6 agents MUST run before presenting work as complete. No exceptions.
 
 0. **fix-advocate** -- For ANY bug fix or debugging task, this agent MUST be invoked BEFORE writing fix code. It diagnoses, explains, proposes, and defends the fix -- only implementing after explicit user approval. BLOCKING for bug fixes. Skip only for net-new feature code with no bug component.
-1. **test-runner** -- Full test suite across all layers. All tests must pass. BLOCKING.
-2. **pattern-enforcer** -- Must report no VIOLATIONS. BLOCKING.
-3. **security-reviewer** -- Must report no CRITICAL findings. BLOCKING.
-4. **monitoring-spec-validator** -- Must ensure a valid 'monitoring_spec.md' is present. BLOCKING.
-5. **frontend-design-reviewer** -- CONDITIONAL: only when changed files match frontend patterns. Must report no CRITICAL findings. BLOCKING on CRITICAL.
-6. **doc-updater** -- Must complete all applicable doc-sync phases. BLOCKING.
+1. **test-gap-auditor** -- Audits test coverage for blind spots. Pre-implementation (fix/patch): "why didn't tests catch this?" with mandatory checklist + user confirmation. Post-implementation (pipeline-tail): coverage audit with auto-fix loop. BLOCKING.
+2. **test-runner** -- Full test suite across all layers. All tests must pass. BLOCKING.
+3. **pattern-enforcer** -- Must report no VIOLATIONS. BLOCKING.
+4. **security-reviewer** -- Must report no CRITICAL findings. BLOCKING.
+5. **monitoring-spec-validator** -- Must ensure a valid 'monitoring_spec.md' is present. BLOCKING.
+6. **frontend-design-reviewer** -- CONDITIONAL: only when changed files match frontend patterns. Must report no CRITICAL findings. BLOCKING on CRITICAL.
+7. **doc-updater** -- Must complete all applicable doc-sync phases. BLOCKING.
 
 ### Enforcement
 - For bug fixes: Do NOT write any fix code until fix-advocate has completed Steps 1-6 and received user approval.
 - Do NOT present work as complete or ask the user to review until all gates have run and passed.
 - If ANY gate reports issues, fix them and re-run before proceeding.
 - After all gates pass, print the completion log:
-  > GATES: fix-advocate ✓ | test-runner ✓ | pattern-enforcer ✓ | security-reviewer ✓ | monitoring-spec-validator ✓ | frontend-design-reviewer ✓ | doc-updater ✓
+  > GATES: fix-advocate ✓ | test-gap-auditor ✓ | test-runner ✓ | pattern-enforcer ✓ | security-reviewer ✓ | monitoring-spec-validator ✓ | frontend-design-reviewer ✓ | doc-updater ✓
   > (When no frontend files changed: frontend-design-reviewer SKIPPED)
 
 ---
@@ -236,6 +237,7 @@ When implementing a feature, execute this pipeline in order:
 | pattern-enforcer | Checks codebase conventions | No (report only) |
 | security-reviewer | Static security analysis | No (report only) |
 | frontend-design-reviewer | Checks design quality, a11y, responsive, UX | No (report only) |
+| test-gap-auditor | Audits test coverage for blind spots (scenarios, layers, wiring) | No (report only) |
 | test-runner | Runs test suites, reports results | No (report only) |
 | monitoring-spec-validator | Enforces monitoring specification creation and validation | No (report only) |
 | monitoring-implementer | Produces monitoring infrastructure from monitoring_spec.md | Yes (scripts only) |
@@ -258,7 +260,7 @@ Skills are user-facing shortcuts. Agents are pipeline building blocks. Each skil
 - `/memory-status` -> standalone (quick memory health dashboard)
 
 ### Standalone Automation Rules
-These are superseded by the NON-NEGOTIABLE GATES section above. Whether inside or outside the pipeline, ALL 4 gates (test-runner, pattern-enforcer, security-reviewer, doc-updater) MUST run after any code changes. No conditional triggers -- they always run.
+These are superseded by the NON-NEGOTIABLE GATES section above. Whether inside or outside the pipeline, ALL 5 gates (test-gap-auditor, test-runner, pattern-enforcer, security-reviewer, doc-updater) MUST run after any code changes. No conditional triggers -- they always run.
 
 ### Agent Inference (Auto-Detection)
 When the user describes a task, automatically detect which agent(s) to invoke based on the task type. **State which agent you're using and proceed -- do not wait for confirmation.**

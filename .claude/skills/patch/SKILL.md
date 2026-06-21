@@ -98,6 +98,27 @@ For bug fixes, invoke the **fix-advocate** agent and complete all 7 diagnosis st
 
 **STOP. Present the diagnosis to the user — including sibling findings, cross-project flags, and robustness assessment — and wait for explicit approval before proceeding.**
 
+### 3b. Test Gap Analysis (BLOCKING, bug fixes only)
+
+**Skip this step for design tweaks.**
+
+After the user approves the fix-advocate diagnosis, invoke the **test-gap-auditor** agent in **Mode A (Diagnosis)**:
+
+**Input to the agent:**
+- The patch description from the user
+- The fix-advocate diagnosis (root cause, affected paths, sibling sweep results)
+- The existing test suite
+
+The agent produces a mandatory three-section checklist answering "why didn't existing tests catch this bug?":
+
+1. **Scenario Coverage** — for each code path involved, was there a happy/unhappy/edge test? Each "covered" cites `file:testName`. Each "gap" includes a Root Cause of Gap.
+2. **Layer Coverage** — for each scenario, was it reachable at unit/integration/e2e? Same evidence format.
+3. **Wiring Coverage** — are all entry points (routes, triggers, flags) exercised by a test? Same evidence format.
+
+After the checklist, the agent assesses whether any gap root causes represent a **recurring pattern**. If so, it proposes a known-failure rule for user approval (same format as Step 6's known-failure capture).
+
+**STOP. Present the test gap analysis to the user and wait for explicit confirmation before proceeding.** Do not proceed to test writing until the user confirms.
+
 ### 4. Write failing tests (BLOCKING — before any implementation)
 
 **Bug fix path:** Construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
