@@ -182,7 +182,24 @@ Define use cases to verify the implementation as Given/When/Then scenarios. Buil
 
 For any e2e-unreachable seam identified in Phase 3, include explicit manual QA steps as a checklist — never stay silent.
 
-**GATE: Pause after this phase and wait for user sign-off before proceeding.**
+**Test Gap Audit (BLOCKING — before GATE).** After producing the scenarios, invoke the **test-gap-auditor** agent in **Mode B (Scenario Audit)**:
+
+**Input to the agent:**
+- The proposed test scenarios from this phase
+- The feature description and scope from Phase 1
+- The implementation approach chosen in Phase 2
+
+The agent audits the proposed scenarios against its mandatory three-section checklist:
+
+1. **Scenario Coverage** — for each code path the feature introduces, do the proposed scenarios cover happy/unhappy/edge? Each "covered" cites the specific scenario line. Each "gap" describes what scenario is missing.
+2. **Layer Coverage** — for each proposed scenario, is it assigned to the right layer (unit/integration/e2e)? Are any layers missing coverage?
+3. **Wiring Coverage** — do the proposed scenarios exercise all entry points (routes, triggers, flags, component imports) the feature will introduce?
+
+If the audit finds gaps, incorporate the missing scenarios into the Phase 4 output before presenting to the user. The updated scenario list (with gaps closed) is what the user reviews.
+
+If the agent identifies a recurring pattern from known-failures that's relevant to the proposed scenarios, surface it: "Known failure rule [X] applies — scenarios already account for it" or "Known failure rule [X] applies — added scenario Y to cover it."
+
+**GATE: Pause after this phase (with audit results incorporated) and wait for user sign-off before proceeding.**
 
 **After user sign-off:** extract the E2E / Acceptance-layer scenarios from this phase and expand them into full Given/When/Then format, then write to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). The acceptance-tester parser requires multi-line GWT — the compact one-liners are for human review only. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
 

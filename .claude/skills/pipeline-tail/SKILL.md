@@ -32,6 +32,7 @@ Run gates in this order. Each gate gets up to **3 retries** on failure. On failu
 **Phase A — Parallel static analysis (all read-only):**
 - **pattern-enforcer** — checks codebase conventions. BLOCKING on VIOLATIONS.
 - **security-reviewer** — static security analysis. BLOCKING on CRITICAL.
+- **test-gap-auditor** — audits test coverage for blind spots (Mode C: Implementation Audit). Runs the mandatory three-section checklist (scenario coverage, layer coverage, wiring coverage) against the implementation diff and test files. BLOCKING on GAP findings — gaps trigger the auto-fix retry loop (write missing tests, re-run auditor). NOT user-blocking — the pipeline self-heals.
 - **monitoring-spec-validator** — validates monitoring_spec.md. Reports DEFERRED if no spec exists.
 - **frontend-design-reviewer** — CONDITIONAL: only if `~/.claude/scripts/needs-design-review.sh` exits 0. BLOCKING on CRITICAL. If exit 2 (no `ui-paths.txt`), report SKIPPED.
 
@@ -150,8 +151,9 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 Emit the GATES completion log + PR link as the final message:
 
 ```
-GATES: pattern-enforcer ✓ | security-reviewer ✓ | monitoring-spec-validator ✓/DEFERRED |
-       frontend-design-reviewer ✓/SKIPPED | test-runner ✓ | acceptance-tester ✓/DEFERRED/SKIPPED |
+GATES: pattern-enforcer ✓ | security-reviewer ✓ | test-gap-auditor ✓ |
+       monitoring-spec-validator ✓/DEFERRED | frontend-design-reviewer ✓/SKIPPED |
+       test-runner ✓ | acceptance-tester ✓/DEFERRED/SKIPPED |
        doc-updater ✓ | memory-review ✓ (<N> actions)
 
 Memory: <created X, updated Y, deleted Z — or "no changes">
