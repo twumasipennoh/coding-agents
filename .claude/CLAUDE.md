@@ -338,3 +338,5 @@ wrap with the longrun helper so heartbeats stream to the user:
     ~/.claude/scripts/longrun-tick.sh -i 60 -l /tmp/<name>.log -- <CMD...>
 
 See `~/.claude/CLAUDE.md` for the full guidance and user-ping cadence.
+
+Calibration: see `calibration.md` in this directory for topic-specific explanation pitching rules (synced from global).

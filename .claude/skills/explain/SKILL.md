@@ -1,13 +1,13 @@
 ---
 name: explain
-description: Re-explain the previous assistant message (or an optional quoted snippet), recalibrated to the user's actual level using their auto-memory profile. Also updates memory so future replies are better calibrated without needing /explain again.
+description: Re-explain the previous assistant message (or an optional quoted snippet), recalibrated to the user's actual level using their auto-memory profile. Updates memory and the global calibration file (~/.claude/calibration.md) so future replies are better calibrated without needing /explain again.
 ---
 
 # /explain — Recalibrate to the user's level
 
 The user invokes `/explain` (or says natural-language equivalents like "explain in simpler terms," "in plain English," "what does that mean," "ELI5," "dumb this down," "I don't follow," "wait, what?") when a prior reply was pitched above their level.
 
-**The skill is a correction, not just a rewrite.** Every invocation is a signal that calibration failed for a topic, so the skill must update memory so it doesn't fail the same way again.
+**The skill is a correction, not just a rewrite.** Every invocation is a signal that calibration failed for a topic, so the skill must update memory AND the global calibration file (`~/.claude/calibration.md`) so it doesn't fail the same way again.
 
 ## Usage
 
@@ -26,8 +26,8 @@ The naturally-tempting ordering — write the rewrite, then update memory, then 
 
 **The required ordering is:**
 
-1. Do all memory **reads** (consult profile).
-2. Do all memory **writes** (Edit/Write the topic file, optionally Edit MEMORY.md).
+1. Do all **reads** (consult profile: MEMORY.md, relevant memory files, `calibration.md`).
+2. Do all **writes** (Edit/Write the topic memory file, optionally Edit MEMORY.md, AND cedit_edit/cedit_write the calibration file).
 3. **Then** emit the rewrite + confirmation **together as the final assistant turn**, with no tool calls after them.
 
 The rewrite and confirmation must be in the same final assistant message. Do not emit any user-facing text before all memory tool calls have completed. If you have already emitted the rewrite as text and then catch yourself about to call Edit/Write on a memory file, stop — that order is the failure. Restart by doing the memory write first, then re-emitting the rewrite + confirmation together as the final turn.
@@ -42,7 +42,7 @@ The rewrite and confirmation must be in the same final assistant message. Do not
 
 2. **Identify the topic** (one to three words: "OAuth," "SAFE valuation caps," "Kubernetes networking," "Rust lifetimes"). You will use this to find or create the right memory file.
 
-3. **Consult the user's profile.** Read `MEMORY.md` and any `user_*` / `feedback_*` memory files relevant to the topic. Especially honor entries that name a calibration preference (e.g., `user_investing_experience.md` says "explain jargon from first principles with numeric scenarios" — that lens applies to any finance topic).
+3. **Consult the user's profile.** Read `calibration.md` (in the project's `.claude/` or the global at `~/.claude/calibration.md`) for a quick-lookup entry on the topic — if one exists, honor its **Right approach** immediately. Also read `MEMORY.md` and any `user_*` / `feedback_*` memory files relevant to the topic for deeper context (e.g., `user_investing_experience.md` says "explain jargon from first principles with numeric scenarios" — that lens applies to any finance topic).
 
 4. **Draft the rewrite internally — do NOT emit it yet.** Use plain language, concrete examples, and analogies grounded in things the user is already known to understand (from their user memories). Don't restate the original — produce a fresh explanation. Match the existing memory's preferred lens if one is recorded. Hold this draft in your working context; it will be emitted in step 6 as part of the final turn.
 
@@ -51,18 +51,26 @@ The rewrite and confirmation must be in the same final assistant message. Do not
    - If no relevant memory exists, **create a new one**. Use the auto-memory format (frontmatter with name/description/type, body covering the calibration signal). For a knowledge-level note, use `type: user`. For a "how to explain this to me" rule, use `type: feedback` with **Why:** and **How to apply:** lines.
    - If you create a new file, add a one-line pointer to `MEMORY.md`. If you only updated an existing file, do NOT add a duplicate pointer.
    - **Never** create a generic file like `user_explain_log.md` or `feedback_calibration.md` that accumulates everything. Memory must stay semantically organized by topic, per the auto-memory rules.
+   - **Auto-promote to global calibration file.** After updating memory, also update `~/.claude/calibration.md` — the cross-project calibration lookup that syncs to all projects via `sync-agents.sh`. Read the file, find the `### <Topic>` heading that matches this topic (if any), and update its bullets. If no entry exists, append a new one:
+     ```
+     ### <Topic Name>
+     - **Wrong pitch**: <what failed — jargon, abstractions, format>
+     - **Right approach**: <what works — lens, examples, mental models>
+     - **Learned**: <YYYY-MM> — <one-line context>
+     ```
+     Use `cedit_edit` for updates to existing entries, `cedit_write` for a full rewrite if appending. This step is mandatory — the memory file has detailed context, the calibration file has the actionable lookup entry. If you judge the calibration to be project-specific (not universal), write to `<project>/.claude/calibration-local.md` instead; otherwise always write to the global.
 
 6. **Emit the rewrite + confirmation together as the final assistant turn.** The rewrite from step 4 is the primary deliverable; the confirmation is a one-line postscript proving the memory write happened. Both go in the **same** final assistant message, with **no tool calls after**. Confirmation examples:
-   - "Updated my notes on SAFE caps — I'll lead with a dollar example next time."
-   - "Added a new memory on OAuth — recorded that flow diagrams land better than RFC terminology."
+   - "Updated my notes on SAFE caps and the calibration file — I'll lead with a dollar example next time."
+   - "Added a new memory on OAuth and a calibration entry — recorded that flow diagrams land better than RFC terminology."
 
    **The rewrite is the visible output of this skill.** If your final turn contains only the confirmation and not the rewrite itself, the skill has failed — that is the exact failure shape this skill's turn-ordering rule exists to prevent.
 
-## When to skip the memory update
+## When to skip the memory + calibration update
 
 - The previous reply was already simple and the user only wanted clarification on one specific term (rare — usually still a signal).
-- The user explicitly said something like "no, I get it, I just want it rephrased for someone else" — in that case the calibration isn't about them, so don't write a memory.
-- Otherwise: always update memory. Silent invocations are wasted signal.
+- The user explicitly said something like "no, I get it, I just want it rephrased for someone else" — in that case the calibration isn't about them, so don't write a memory or calibration entry.
+- Otherwise: always update both memory and calibration. Silent invocations are wasted signal.
 
 ## Natural-language triggers
 
