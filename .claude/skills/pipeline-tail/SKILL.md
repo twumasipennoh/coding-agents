@@ -29,8 +29,11 @@ The parent skill must NOT:
 
 Run gates in this order. Each gate gets up to **3 retries** on failure. On failure: auto-fix the issue, then re-run that specific gate. If a gate exhausts its 3 retries, **STOP the entire pipeline** — do not commit, push, or create a PR. Report the persistent failure and leave the branch as-is.
 
+**Phase A-0 — Deterministic wiring gate (pre-analysis):**
+Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` before launching the parallel agents. Pass its JSON output to **pattern-enforcer** as invocation context so it can escalate findings to semantic verification. If the script exits 2 (tool failure), log a warning and continue — don't block on tooling issues.
+
 **Phase A — Parallel static analysis (all read-only):**
-- **pattern-enforcer** — checks codebase conventions. BLOCKING on VIOLATIONS.
+- **pattern-enforcer** — checks codebase conventions + consumes `check-wiring.sh` output for semantic escalation. BLOCKING on VIOLATIONS.
 - **security-reviewer** — static security analysis. BLOCKING on CRITICAL.
 - **test-gap-auditor** — audits test coverage for blind spots (Mode C: Implementation Audit). Runs the mandatory three-section checklist (scenario coverage, layer coverage, wiring coverage) against the implementation diff and test files. BLOCKING on GAP findings — gaps trigger the auto-fix retry loop (write missing tests, re-run auditor). NOT user-blocking — the pipeline self-heals.
 - **monitoring-spec-validator** — validates monitoring_spec.md. Reports DEFERRED if no spec exists.

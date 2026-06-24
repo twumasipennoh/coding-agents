@@ -125,6 +125,10 @@ Never leave any category empty for any layer.
 
 **Acceptance scenario checkpoint (BLOCKING):** Before proceeding, verify that test-creator produced acceptance scenarios by checking test-creator's output summary for the `Acceptance scenarios:` line. If that line is absent, OR if running `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` returns empty, re-invoke test-creator with this explicit directive: "You exited without acceptance scenarios. Write Given/When/Then scenarios for this fix in `tests/acceptance/scenarios/<fix-slug>.md` per your Phase 4 section. This is BLOCKING." Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
 
+### 3b. Wiring Gate
+
+Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` to capture the pre-fix wiring baseline. Note any pre-existing findings (don't block on them). After writing the fix in Step 4, re-run the script and verify no NEW wiring findings were introduced. If new findings appear, fix them before proceeding to Step 5.
+
 ### 4. Write fix code (only after tests are confirmed failing)
 
 After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code. The fix must cover all current-project siblings approved in Step 2.

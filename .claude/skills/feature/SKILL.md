@@ -67,7 +67,30 @@ Run the **test-creator** agent -> reads the task spec from `FEATURE_PROMPTS.md`,
 
 **Acceptance scenario checkpoint (BLOCKING):** Before proceeding to Step 3, verify that test-creator produced acceptance scenarios by checking test-creator's output summary for the `Acceptance scenarios:` line. If that line is absent, OR if running `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` returns empty, re-invoke test-creator with this explicit directive: "You exited without acceptance scenarios. Write Given/When/Then scenarios for this feature in `tests/acceptance/scenarios/<feature-slug>.md` per your Phase 4 section. This is BLOCKING." Do NOT proceed to implementation with only unit/integration tests. If the project has `.claude/no-acceptance`, skip this checkpoint.
 
+### Step 2b — Wiring Gate (BLOCKING)
+
+Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` against the current codebase. This captures the pre-implementation wiring baseline. If the project has no `.claude/wiring-config.md`, the script auto-scaffolds one.
+
+- If findings exist: note them as **pre-existing wiring gaps** (don't block — they predate this feature). Log the count.
+- Pass the seam list from requirements-clarifier Phase 3 (if available) to Step 3 as implementation context.
+
 ### Step 3 — Implement Feature
+
+**Pre-write call-chain trace (MANDATORY before writing any code):**
+1. Read the task's "Implementation Steps" from `FEATURE_PROMPTS.md`.
+2. For each step, trace the call chain from entry point to persistence. List every file you will touch and every integration point (where one module calls another, where a new parameter is passed, where a service is injected, where a route is registered).
+3. Output the trace as a checklist:
+   ```
+   [ ] file.py:create_app — inject new_service (wiring: constructor param)
+   [ ] routes.py:new_endpoint — register in blueprint (wiring: route registration)
+   [ ] .env.example — add NEW_VAR (wiring: env var)
+   ```
+4. After writing all implementation code, verify against this checklist. Every item must be checked off. If any item was missed, fix it before proceeding. If you touched a file not in the trace, add it retroactively and verify its wiring.
+
+**Post-write wiring re-check:** Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` again. Compare findings to the pre-implementation baseline from Step 2b. Any NEW findings (not in baseline) are regressions introduced by this implementation — fix them before proceeding to Step 4.
+
+**Proactive rule generation:** If during the trace you identify a seam type not covered by existing known-failures or script rules, emit a candidate to `~/.claude/state/wiring-rules/review-queue.jsonl`.
+
 Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps."
 
 ### Step 4 — Monitoring (feature-only)

@@ -163,6 +163,10 @@ fix-spec:
 
 Never leave any category empty.
 
+### 4b. Wiring Gate
+
+Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` to capture the pre-implementation wiring baseline. Note any pre-existing findings (don't block on them). After writing the implementation in Step 5, re-run the script and verify no NEW wiring findings were introduced. If new findings appear, fix them before proceeding to Step 6.
+
 ### 5. Implement
 
 Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires. For bug fixes, the implementation must cover all current-project siblings approved in Step 3.

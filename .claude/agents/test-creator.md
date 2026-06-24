@@ -117,6 +117,20 @@ Never leave any category empty for any layer. Writing only happy-path tests for 
 - Use specific locators (getByRole, getByTestId, nth()) over generic text matching.
 - **Happy:** full user flow completes successfully. **Unhappy:** form submitted with missing/invalid fields, session expired mid-flow, network error, permission denied. **Edge:** very long content, back-navigation mid-flow, deep links into protected pages, concurrent sessions.
 
+### Wiring Tests (MANDATORY when seam list is provided)
+
+If the invoking skill (requirements-clarifier or feature pipeline) provides a **structured seam list** — lines in the format `[file:function] → [file:function] via [parameter/import/config]` — write at least one integration test per seam that exercises both sides of the wire in a single test.
+
+**What a wiring test verifies:** that the connection between two layers actually works end-to-end — not that each side works in isolation (unit tests do that), but that the wire between them is present and correct. Example: if the seam is `[app.py:create_app] → [status_api.py:StatusBlueprint] via [service injection]`, the wiring test instantiates the app via `create_app()` and asserts the status endpoint is reachable and returns data from the injected service.
+
+**Rules:**
+- One test per seam minimum. If a seam has a `[RISK]` flag, write happy + unhappy (what happens when the wire is broken — missing param, wrong type, unregistered route).
+- Wiring tests live alongside integration tests, not in a separate directory.
+- If the seam list is empty (no integration seams identified), skip this section silently — don't generate placeholder tests.
+- If no seam list is provided (older pipeline invocation without the wiring-completeness trace), skip silently.
+
+**Proactive rule generation:** If while writing wiring tests you identify a seam pattern not covered by existing known-failures rules or `check-wiring.sh` script rules, emit a candidate rule. Append to `~/.claude/state/wiring-rules/review-queue.jsonl` in JSON format: `{"source_skill":"test-creator","domain_tag":"...","rule_type":"grep|semgrep|ast-grep","pattern":"...","description":"...","timestamp":"ISO"}`.
+
 ## Test Conventions
 
 <!-- UPDATE: Replace with YOUR project's test conventions -->
