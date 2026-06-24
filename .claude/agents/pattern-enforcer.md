@@ -106,9 +106,13 @@ After completing the standard review (universal + project-specific patterns), ru
 
 If neither sidecar file exists, skip this step silently (no block, no error).
 
-### Generic wiring completeness check
+### Wiring completeness check (script-integrated)
 
-Independent of known-failures, verify these mechanical wiring patterns in every review:
+**Step 1 — Consume deterministic script output.** If `check-wiring.sh` output is provided in the invocation context (JSON array of findings), use it as the starting point. Each script finding has already been verified deterministically — do not re-run the syntactic check. Instead, **escalate each script finding to semantic verification**: for a `env-var` finding, verify the env var is not only declared but used correctly (right value, right context). For a `wrapper-delegation` finding, verify the delegated method signature matches the inner class (not just that a method with the same name exists). For a `route-coverage` finding, verify the route handler's middleware chain is complete (auth, validation, rate limiting as applicable).
+
+If no script output is provided (older pipeline invocation, or script not yet integrated), fall back to the mechanical checks below.
+
+**Step 2 — Mechanical checks (fallback or supplement).** Independent of script output, verify these patterns for any wiring types the script doesn't cover:
 
 - [ ] New route/blueprint/endpoint → registered in the router/app factory/URL config
 - [ ] New public method on a wrapped/decorated class → delegation added to all wrappers
@@ -118,7 +122,11 @@ Independent of known-failures, verify these mechanical wiring patterns in every 
 - [ ] New model/type field → included in serialization/deserialization (`from_dict`, `to_dict`, etc.)
 - [ ] DOM element with test selector → no stale references in existing test files
 
-Report wiring violations as `[wiring-completeness]` findings.
+**Step 3 — Semantic trace (one level up).** For each new public method, constructor parameter, or API field in the changeset, trace one level up to the caller and verify the caller passes the correct value. This catches the "parameter exists but is wrong" class of bug that scripts can't detect. Example: if a new `user_repo` parameter is added to `StatusService.__init__`, verify that `create_app()` passes the actual `UserRepository` instance, not a different repo.
+
+Report wiring violations as `[wiring-completeness]` findings. For escalated script findings, tag as `[wiring-completeness:escalated]`.
+
+**Proactive rule generation:** If you identify a wiring pattern not covered by existing script rules, emit a candidate to `~/.claude/state/wiring-rules/review-queue.jsonl` in JSON format: `{"source_skill":"pattern-enforcer","domain_tag":"...","rule_type":"grep|semgrep|ast-grep","pattern":"...","description":"...","timestamp":"ISO"}`.
 
 ## How to Review
 
