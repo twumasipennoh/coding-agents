@@ -2,6 +2,8 @@
 
 > **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `bug-fix`, display name `Bug Fix`. Call `begin bug-fix "Bug Fix" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below. Skip interactive steps (user gates, clarification phases) — they self-announce. **`end` is delegated to `/pipeline-tail`** — do NOT call `end` yourself.
 
+> **Pacing:** multi-part deliverables follow `~/.claude/references/one-beat-per-turn.md`.
+
 Fix a bug using the **fix-advocate** agent for mandatory diagnosis before any code is written.
 
 ## Usage

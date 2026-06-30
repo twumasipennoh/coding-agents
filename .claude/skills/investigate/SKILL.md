@@ -6,6 +6,8 @@ Investigate a bug, alert, or open-ended "how does this work" question. Runs the 
 
 > **Final output ordering.** The investigator agent's closing turn IS the deliverable. Do all `pipeline-step.sh end` calls BEFORE the agent's final summary, never after.
 
+> **Pacing:** multi-part deliverables follow `~/.claude/references/one-beat-per-turn.md`.
+
 ## Usage
 
 ```
