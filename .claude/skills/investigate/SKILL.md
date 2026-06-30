@@ -8,6 +8,29 @@ Investigate a bug, alert, or open-ended "how does this work" question. Runs the 
 
 > **Pacing:** multi-part deliverables follow `~/.claude/references/one-beat-per-turn.md`.
 
+<!-- LEAN_OUTPUT_SUMMARY_START -->
+## Lean output rules (canonical summary — auto-synced from `~/.claude/references/lean-output.md`)
+
+- **Compact one-liner format by default.** Each item is one line:
+  `name — 1-sentence summary (constraints in parens)`. Drill-down only
+  on explicit user request ("expand", "full details", "show me X").
+- **Padding-killers.** Never restate prior answers. Never preamble the
+  next item ("Now I'll cover…", "Moving on to…"). A turn ending in two
+  question marks is a bug — pick the load-bearing question, let the
+  answer tee up the next turn.
+- **Load-bearing first.** For lists of 3+ items, deliver the most
+  load-bearing one first — the option you'd recommend, the worst
+  finding, the user-facing change. Don't bury the lede.
+- **Coverage tally for long lists.** Open with `N items: X top, Y
+  secondary, Z edge` so the user can scan distribution before reading.
+- **Side-channel instrumentation.** Log rule applications to
+  `~/.claude/state/rule-hits.jsonl` via
+  `~/.claude/scripts/log-rule-hit.sh lean-output <rule>` — don't cite
+  rules inline in user-facing replies.
+<!-- LEAN_OUTPUT_SUMMARY_END -->
+
+> **Rule consultation.** Before any user-facing deliverable, read `~/.claude/references/lean-output.md` and `~/.claude/calibration.md`. Apply matching entries (where **Wrong pitch** matches your planned output shape) by formatting per the **Right approach**. Don't cite rules inline. Call `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> investigate` for each rule applied, BEFORE the final assistant turn. **Compact-format for this skill:** spine steps as `Reproduce: 1-line + evidence; Locate: file:line + 1 phrase; Root cause: 1 sentence; Impact: scope + severity; Siblings: count + 1-line if any`. Tradeoff discussion as scenario walkthroughs, not abstract architecture talk.
+
 ## Usage
 
 ```
