@@ -8,6 +8,8 @@ Generalization of `/requirements-clarifier` Phase 1b without the build/buy gate.
 
 > **Final output ordering.** The structured options output IS the deliverable. Do all `pipeline-step.sh end` calls BEFORE the final assistant turn.
 
+> **Pacing:** multi-part deliverables follow `~/.claude/references/one-beat-per-turn.md`.
+
 ## Usage
 
 ```

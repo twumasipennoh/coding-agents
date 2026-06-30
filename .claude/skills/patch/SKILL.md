@@ -2,6 +2,8 @@
 
 > **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `patch`, display name `Patch`. Call `begin patch "Patch" --total <N>` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below. Skip interactive steps (user gates, clarification phases) — they self-announce. **`end` is delegated to `/pipeline-tail`** — do NOT call `end` yourself.
 
+> **Pacing:** multi-part deliverables follow `~/.claude/references/one-beat-per-turn.md`.
+
 Lightweight flow for small fixes and design tweaks. Runs the right quality gates without the full feature pipeline.
 
 ## Usage
