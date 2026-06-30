@@ -19,12 +19,7 @@ Each phase below lists multiple sub-sections of questions. Do NOT ask all of the
 5. Continue until you have enough substance to emit the phase's GATE message.
 6. The GATE message is the only "deliverable" turn for the phase. It carries the findings + the gate prompt, per the ordering rule above.
 
-**Between questions — kill the padding.**
-
-- **Never restate prior answers.** No "So far you've said X about Y and Z about W..." — the user just gave the answer; they have the context.
-- **Never preamble the next question** with "Now I'll ask about <topic>" or "Moving on to <area>". Just ask the next question.
-- **One question per turn — no multi-question dumps.** A turn that ends with two question marks is a bug. If two things are genuinely entangled, pick the load-bearing one and let the answer tee up the next turn.
-- **Acknowledgments stay tight.** A one-line ack is fine if the answer surprises or pivots ("ok, so offline-first changes the surface — "), but the next turn's body is the next question, not a paragraph weighing the implication.
+**Between questions — kill the padding.** See `~/.claude/references/one-beat-per-turn.md` Rule A ("Between questions — kill the padding") for the full rules: never restate prior answers, never preamble the next question, one-question-per-turn (a turn ending in two question marks is a bug), tight acknowledgments. The output-shape companion lives at `~/.claude/references/lean-output.md`.
 
 This overrides any later instruction in this file that lists multiple questions to ask "in" a phase — those lists are the menu, not the script. You're picking from the menu one item at a time, not reading the menu aloud.
 
