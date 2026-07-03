@@ -75,8 +75,8 @@ When auto-fixing test-runner failures, you MUST follow these rules based on the 
 **By classification:**
 - **REGRESSION** failures (tests that were passing before our changes): fix the APPLICATION CODE to make the test pass. The test caught a real bug in our changes. Do NOT modify the test.
 - **NEW-FAILING** failures (test-creator's tests for the new feature/fix): fix the APPLICATION CODE to satisfy the test contract. These tests define what the implementation should do. Do NOT modify the test.
-- **PRE-EXISTING** failures (tests already broken before our branch): do NOT fix these. They aren't caused by our changes. Note them in the GATES log as "PRE-EXISTING: X failures (not caused by this branch)" and exclude them from the gate pass/fail decision.
 - **UNCLASSIFIED** failures (no baseline available): treat as REGRESSION — fix the application code, not the test.
+- **PRE-EXISTING** failures should never appear under the main-must-be-green rule (see `/feature` Step 0d, `/fix` Step 0b, `/patch` Step 0b — the baseline snapshot hard-blocks if any layer is red). If a PRE-EXISTING failure ever surfaces, it means the baseline block was bypassed or the baseline file is stale/corrupt. Treat as REGRESSION and fix the application code, but first surface a note to the user: "PRE-EXISTING failures appeared despite green-baseline enforcement — baseline artifact may be stale, or a manual bypass occurred. Investigate `.claude/state/test-baseline-<branch>.json`."
 
 **Hard rules (never violate):**
 - **NEVER** add `.skip()`, `.todo()`, `xit()`, `xdescribe()`, `@pytest.mark.skip`, `@unittest.skip`, or any test-skipping annotation as an auto-fix.

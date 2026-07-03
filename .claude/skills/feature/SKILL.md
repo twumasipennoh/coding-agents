@@ -53,7 +53,9 @@ Capture the current test suite state BEFORE any implementation begins. This base
 5. **Validation**: compare `layers_run` against the layers defined in `test-commands.md`. If any defined layer is missing from `layers_run`, the baseline is incomplete — re-run the missing layer(s) before proceeding.
 6. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED).
 
-This step is non-blocking — pre-existing failures are recorded, not fixed. They'll be excluded from the gate in pipeline-tail.
+**BLOCKING — main-must-be-green rule.** If any layer in `failing_by_layer` is non-empty, STOP the pipeline immediately. Report failing tests grouped by layer and refuse to proceed. The baseline is captured on a freshly-cut branch off main, so failing tests here mean main itself is red — starting new work on a red base hides regressions inside the "PRE-EXISTING permit" that pipeline-tail's Auto-Fix Constraints grant ([pipeline-tail.md § Auto-Fix Constraints](/home/kwaku/.claude/skills/pipeline-tail/SKILL.md#L71)). Fix main first (revert the offending commit, or fix forward on a dedicated repair branch), then re-run `/feature`.
+
+Exception: if `.claude/test-commands.md` is missing (Step 6 above), the baseline step was skipped and this block does not apply — new/bootstrapping projects still proceed normally.
 
 ### Step 1 — Pre-Flight Validation
 Run the **pre-flight** agent to verify the project is in a clean state:
