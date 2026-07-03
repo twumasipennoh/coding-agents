@@ -174,6 +174,14 @@ On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, 
 
 Do nothing specific in this step beyond the helper call — the pipeline-step helper already sends a telegram message. Use the `--note` field on `end` to carry the extra context (`<project-name> to <env-label>`, commit hash, branch, deployed URL).
 
+**Log applied lean-output rules NOW (before the final assistant turn).** For each rule you applied when shaping the deploy summary and Verify checklist below, call:
+
+```
+~/.claude/scripts/log-rule-hit.sh lean-output <rule-slug> deploy
+```
+
+Typical slugs for this skill: `compact-one-liner` (per-stage summary format), `load-bearing-first` (URL + status first), `coverage-tally` (if you opened with a "N stages: X pass Y fail" line). Skip if no lean-output rule actually shaped the output. Do this here — the pre-Steps blockquote is easy to forget by Step 6.
+
 **Deployed URL — always append a cache-bust query string.** Whenever you surface the deployed URL — in the `end` note, the final assistant summary, or any user-facing message after deploy — append `?v=<short-hash>` (the same `git rev-parse --short HEAD` value used in the log row). Reason: browsers + service workers + CDN edge caches frequently serve a stale HTML/JS bundle right after deploy, so kwaku clicks the link and sees the old build with no indication anything shipped. The cache-bust forces a fresh fetch every time. Examples: `https://habit-tracker-staging-3fd56.web.app/?v=a1b2c3d`, `http://localhost:3000/?v=a1b2c3d`. For `kind: "local-script"` deploys with no public URL, skip this — there's nothing to link. If the URL already has a query string, append with `&v=<short-hash>` instead.
 
 - **On success:** `pipeline-step.sh done deploy "Notify"`, then `pipeline-step.sh end deploy --status ok --note "<project-name> to <env-label> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>. URL: <deployed-url>?v=<short-hash>"`.
