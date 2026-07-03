@@ -127,8 +127,8 @@ E2E Gate: ✅ PASS / ❌ BLOCKED — <reason> / ⏭️ SKIPPED (no e2e layer def
 
 **Classification rules for the auto-fix loop:**
 - **REGRESSION** and **NEW-FAILING** failures count as gate-blocking. The pipeline must fix these before proceeding.
-- **PRE-EXISTING** failures are reported but do NOT block the gate. They existed before our branch.
-- If no baseline exists, all failures are **UNCLASSIFIED** and treated as gate-blocking (safe default).
+- **UNCLASSIFIED** failures (no baseline available) are gate-blocking (safe default).
+- **PRE-EXISTING** failures are gate-blocking under the main-must-be-green rule enforced by `/feature`, `/fix`, and `/patch` at Step 0d/0b. Their appearance indicates baseline enforcement was bypassed or the baseline file is stale/corrupt — flag for investigation and treat as regression (see `~/.claude/skills/pipeline-tail/SKILL.md` § Auto-Fix Constraints).
 
 For all failures, include:
 - Test name
