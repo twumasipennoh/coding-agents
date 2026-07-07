@@ -25,6 +25,47 @@ The parent skill must NOT:
 
 ## Steps
 
+### 0. Resume check + checkpoint protocol (survivability)
+
+The gate sequence below can span more than one openclaw `/claude` turn — a long or
+backgrounded step (acceptance-tester, a full test-runner suite, the deploy upload)
+can outlive the turn that started it. When that turn emits its final text the
+gateway kills its process group, so an un-detached step dies silently and the run
+never resumes. This protocol makes the sequence **survivable and resumable**.
+
+Two rules, applied throughout Steps 1-6:
+
+- **Detach anything long.** Any gate step expected to run longer than ~2 min, or
+  that you background, MUST be launched under `~/.claude/scripts/longrun-tick.sh`
+  (per CLAUDE.md § "Long-running commands"). longrun-tick self-detaches (`setsid`,
+  SIGHUP-immune) and reports its own DONE/failure independent of the live turn, so
+  the step survives the turn ending. Never start a suite or upload as a raw
+  background process — that's the silent-death path.
+- **Checkpoint every gate.** State is tracked by
+  `~/.claude/scripts/pipeline-checkpoint.sh`, keyed on the **git branch** (stable
+  across turns — the session id is not; in openclaw it collapses to `pid-$PPID`,
+  which changes every turn).
+
+At the very start of this skill:
+
+1. `pipeline-checkpoint.sh state <pipeline-id> $(pwd)` — if it prints `none`, this
+   is a fresh run: call `pipeline-checkpoint.sh begin <pipeline-id> $(pwd)` and
+   proceed from gate 1. If it prints a checkpoint, this is a **resume**: skip every
+   gate already in `gates_passed`, and re-enter at `current` (re-check its result if
+   `current_status` was `running`) or the first gate not yet passed.
+
+During the gate sequence:
+
+- Before a long/detached step: `pipeline-checkpoint.sh pending <pipeline-id> <gate> $(pwd)`.
+- On a gate passing: `pipeline-checkpoint.sh pass <pipeline-id> <gate> $(pwd)`.
+- On a gate failing (after retries): `pipeline-checkpoint.sh fail <pipeline-id> <gate> $(pwd)`.
+- Skip-guard: before running any gate, `pipeline-checkpoint.sh passed <pipeline-id> <gate> $(pwd)` (exit 0 = already passed, skip it).
+
+Cleanup: on terminal `end` (Step 6 or the failure path), call
+`pipeline-checkpoint.sh clear <pipeline-id> $(pwd)` — the checkpoint has done its
+job and must not linger. Orphaned checkpoints (turn died mid-run, never resumed)
+are reaped by cron at ~48h.
+
 ### 1. Run quality gates (auto-fix with retry)
 
 Run gates in this order. Each gate gets up to **3 retries** on failure. On failure: auto-fix the issue, then re-run that specific gate. If a gate exhausts its 3 retries, **STOP the entire pipeline** — do not commit, push, or create a PR. Report the persistent failure and leave the branch as-is.
@@ -45,7 +86,11 @@ Before running any Phase B gate, start the test environment deterministically:
 - **Test Environment Setup** — run `~/.claude/scripts/acceptance-infra.sh start $(pwd)` via Bash (not an LLM agent). This starts emulators/dev servers per the project's `.claude/acceptance-config.md` Pre-Run Setup block, with retry logic and the cross-project lock. If the project has no `acceptance-config.md`, skip this sub-step (test-runner manages its own Pre-Test Setup via `test-commands.md`). Announce via `pipeline-step.sh start/done/fail`.
 - If setup fails after retries, BLOCK the pipeline — do not proceed to test gates.
 
-Then run the gates sequentially:
+Then run the gates sequentially. For the two long gates below (a full test-runner
+suite and acceptance-tester), mark the checkpoint `pending` before starting and run
+the underlying suite command under `~/.claude/scripts/longrun-tick.sh` (per Step 0)
+so it survives the turn ending and reports DONE independently. Mark `pass`/`fail`
+on the checkpoint when the verdict lands:
 - **test-runner** — full test suite across all layers. BLOCKING. Emulators are already running; test-runner's Pre-Test Setup should verify (check) but not re-start.
 - **acceptance-tester** — invoke as a full-tool agent (`subagent_type: claude`). BLOCKING if scenarios can't reach `Then` clause. Reports DEFERRED only if sidecar was auto-scaffolded (missing `.claude/acceptance-config.md`). Reports SKIPPED if `.claude/no-acceptance` present. Emulators are already running; Pre-Run Setup checks should find state = `ours` and reuse.
 
@@ -149,7 +194,7 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 
 ### 6. Final output
 
-> ⚠️ **Call `pipeline-step.sh end <pipeline-id> --status ok|fail` before writing any text.** End-before-deliverable rule — the reply must be the final turn with no tool calls after it.
+> ⚠️ **Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)` then `pipeline-step.sh end <pipeline-id> --status ok|fail` before writing any text.** The checkpoint is cleared on terminal success; the end-before-deliverable rule means the reply must be the final turn with no tool calls after it.
 
 Emit the GATES completion log + PR link as the final message:
 
@@ -170,7 +215,7 @@ If any gate required retries, note it: `pattern-enforcer ✓ (2 retries)`.
 
 If any gate exhausts its 3 retries:
 
-1. Call `pipeline-step.sh end <pipeline-id> --status fail --note "<gate> failed after 3 retries"`.
+1. Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)`, then `pipeline-step.sh end <pipeline-id> --status fail --note "<gate> failed after 3 retries"`.
 2. Emit a failure report as the final message:
 
 ```
