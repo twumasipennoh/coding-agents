@@ -29,6 +29,13 @@ Generalization of `/requirements-clarifier` Phase 1b without the build/buy gate.
   `~/.claude/state/rule-hits.jsonl` via
   `~/.claude/scripts/log-rule-hit.sh lean-output <rule>` — don't cite
   rules inline in user-facing replies.
+- **Deliverable-type traps (from the miss log).** A verdict, approval
+  gate, or diagnosis does NOT earn 350 words (`earned-is-not-a-license`):
+  compress to root-cause + fix/decision shape + the one ask. Lead with
+  the load-bearing sentence, recap only if asked (`lead-not-recap`). A
+  yes/no-ish or single-axis question gets the direct answer in sentence
+  one plus at most one caveat (`binary-answer-first`). End on exactly
+  one question (`one-ask-per-turn`).
 <!-- LEAN_OUTPUT_SUMMARY_END -->
 
 > **Rule consultation.** Before any user-facing deliverable, read `~/.claude/references/lean-output.md` and `~/.claude/calibration.md`. Apply matching entries (where **Wrong pitch** matches your planned output shape) by formatting per the **Right approach**. Don't cite rules inline. Call `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> research` for each rule applied, BEFORE the final assistant turn. **Compact-format for this skill:** options-list items as `name — 1-sentence summary (license, size, maintenance status, fit/misfit in parens)`; explainer paragraphs as scenario walkthroughs; matrix cells as ✓ / ✗ / partial / 1-word note.
