@@ -1,14 +1,23 @@
 ---
 name: rule-status
-description: Read the rule-hits.jsonl log and report which calibration and lean-output rules fired across recent sessions. Use when debugging "is the auto-rule system actually working?"
+description: Read the rule-hits.jsonl and rule-misses.jsonl logs and report which output rules fired — and which were violated — across recent sessions. Use when debugging "is the auto-rule system actually working?" or "am I still running long?"
 ---
 
 # /rule-status — Audit Log Readout
 
-Reports aggregate stats from `~/.claude/state/rule-hits.jsonl` — the side-channel
-log written by skills when they apply a calibration or lean-output rule. This
-skill exists so the auto-rule machinery is **debuggable without polluting
-user-facing replies** (per the side-channel-instrumentation rule).
+Reports aggregate stats from two side-channel logs:
+
+- `~/.claude/state/rule-hits.jsonl` — written by skills when they **apply** a
+  calibration or lean-output rule (self-reported successes).
+- `~/.claude/state/rule-misses.jsonl` — written by the turn-length `Stop` hook
+  and by `/shorten` when an output rule is **violated** (a turn ran too long,
+  or a multi-part answer was chunked-then-dumped instead of paced).
+
+Hits alone only prove skills *claim* compliance; misses are the counter-signal
+that catches overflow the hit log can't see. Always report both — a healthy
+system trends toward more hits and fewer misses. This skill exists so the
+machinery is **debuggable without polluting user-facing replies** (per the
+side-channel-instrumentation rule).
 
 ## Usage
 
@@ -18,6 +27,7 @@ user-facing replies** (per the side-channel-instrumentation rule).
 /rule-status all              → all-time aggregate
 /rule-status <skill>          → filter to one skill (e.g. /rule-status research)
 /rule-status by-entry         → top entries across all skills
+/rule-status misses           → violations only (overflows + chunk-then-dumps)
 /rule-status raw              → tail the last 20 lines of the log verbatim
 ```
 
@@ -40,6 +50,7 @@ If the file exists but is empty, report: "Log file present but empty — same di
 - `7d`, `30d`, `90d`, `all` → window=that, mode=`aggregate`
 - A skill name matching `~/.claude/skills/*/` → window=`7d`, mode=`by-skill`, filter=skill
 - `by-entry` → window=`7d`, mode=`by-entry`
+- `misses` → window=`7d`, mode=`misses`
 - `raw` → window=`7d`, mode=`raw`
 
 ### 3. Build the readout
@@ -47,9 +58,18 @@ If the file exists but is empty, report: "Log file present but empty — same di
 Use `jq` if available, otherwise a Bash + awk pipeline. Compute:
 
 - **Aggregate mode:** total hits in window, count by rule_family (calibration vs lean-output),
-  count by skill (top 5), count by entry (top 5).
+  count by skill (top 5), count by entry (top 5). **Also** read
+  `rule-misses.jsonl` for the same window and append a one-line misses tally:
+  total misses, split by `source` (hook vs shorten) and by `entry`
+  (length-overflow vs chunk-then-dump). If misses > 0, note the largest
+  `words` value seen ("worst overflow: 412 words"). This contrast line is
+  the load-bearing signal — surface it high.
 - **By-skill mode:** total hits for this skill in window, count by entry within this skill.
 - **By-entry mode:** total hits per entry across all skills in window, sorted descending.
+- **Misses mode:** read only `rule-misses.jsonl`. Total in window, split by
+  `source` and `entry`, top offending `context` values, and the distribution
+  of `words` (min/median/max) for `length-overflow` entries. This is the
+  "am I still running long?" view — lead with the worst overflow.
 - **Raw mode:** last 20 log lines pretty-printed.
 
 ### 4. Format the output per lean-output rules

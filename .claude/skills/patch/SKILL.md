@@ -23,6 +23,13 @@
   `~/.claude/state/rule-hits.jsonl` via
   `~/.claude/scripts/log-rule-hit.sh lean-output <rule>` — don't cite
   rules inline in user-facing replies.
+- **Deliverable-type traps (from the miss log).** A verdict, approval
+  gate, or diagnosis does NOT earn 350 words (`earned-is-not-a-license`):
+  compress to root-cause + fix/decision shape + the one ask. Lead with
+  the load-bearing sentence, recap only if asked (`lead-not-recap`). A
+  yes/no-ish or single-axis question gets the direct answer in sentence
+  one plus at most one caveat (`binary-answer-first`). End on exactly
+  one question (`one-ask-per-turn`).
 <!-- LEAN_OUTPUT_SUMMARY_END -->
 
 > **Rule consultation.** Before any user-facing deliverable (classification in Step 1, diagnosis in Step 3, test gap in Step 3b, known-failure in Step 6), read `~/.claude/references/lean-output.md` and `~/.claude/calibration.md`. Apply matching entries (where **Wrong pitch** matches your planned output shape) by formatting per the **Right approach**. Don't cite rules inline. Call `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> patch` for each rule applied, BEFORE the final assistant turn. **Compact-format for this skill:** diagnosis steps as `Step: 1-line finding (file:line if anchored)`; tweak options as `Option X — 1-sentence visual/behavioral change (effort in parens)`; lead with the user-visible target state.
