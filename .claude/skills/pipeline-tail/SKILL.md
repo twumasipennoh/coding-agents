@@ -35,12 +35,19 @@ never resumes. This protocol makes the sequence **survivable and resumable**.
 
 Two rules, applied throughout Steps 1-6:
 
-- **Detach anything long.** Any gate step expected to run longer than ~2 min, or
-  that you background, MUST be launched under `~/.claude/scripts/longrun-tick.sh`
-  (per CLAUDE.md § "Long-running commands"). longrun-tick self-detaches (`setsid`,
-  SIGHUP-immune) and reports its own DONE/failure independent of the live turn, so
-  the step survives the turn ending. Never start a suite or upload as a raw
-  background process — that's the silent-death path.
+- **Hold the turn — never detach a gate to resume it later.** Any gate step
+  expected to run longer than ~2 min MUST be run **blocking, in the same turn**,
+  streamed via the `Monitor` tool under `~/.claude/scripts/longrun-tick.sh` (per
+  CLAUDE.md § "Long-running commands"). Under openclaw `/claude` (`claude -p`) there
+  is no agent loop after the final turn, so a gate launched detached (fire-and-forget
+  background process + end the turn) has nothing to re-invoke it and the pipeline
+  stalls forever. The plugin's 600s limit is an **idle** (no-output) timeout, not
+  wall-clock — longrun-tick's 60s `[TICK]` keeps output flowing so a foreground gate
+  safely holds the turn for an hour+. longrun-tick's `setsid` self-detach is
+  belt-and-suspenders against an *unexpected* turn death (so the log/DONE survive for
+  the checkpoint to resume from) — it is NOT license to end the turn on purpose.
+  Never start a suite or upload as a detached background job and emit a final turn
+  expecting resumption — that's the silent-stall path.
 - **Checkpoint every gate.** State is tracked by
   `~/.claude/scripts/pipeline-checkpoint.sh`, keyed on the **git branch** (stable
   across turns — the session id is not; in openclaw it collapses to `pid-$PPID`,
@@ -56,7 +63,7 @@ At the very start of this skill:
 
 During the gate sequence:
 
-- Before a long/detached step: `pipeline-checkpoint.sh pending <pipeline-id> <gate> $(pwd)`.
+- Before a long (in-turn, blocking) step: `pipeline-checkpoint.sh pending <pipeline-id> <gate> $(pwd)`.
 - On a gate passing: `pipeline-checkpoint.sh pass <pipeline-id> <gate> $(pwd)`.
 - On a gate failing (after retries): `pipeline-checkpoint.sh fail <pipeline-id> <gate> $(pwd)`.
 - Skip-guard: before running any gate, `pipeline-checkpoint.sh passed <pipeline-id> <gate> $(pwd)` (exit 0 = already passed, skip it).

@@ -104,6 +104,61 @@ Using `deploy.json.environments`:
 For `kind: "firebase"`, read the resolved `alias` and `projectId` for subsequent steps.
 For `kind: "local-script"`, the environment key itself (e.g. `"local"`) is the label used in logs + notifications — there's no cloud project ID.
 
+### Step 2b — Resume check + checkpoint protocol (survivability)
+
+The gate sequence in Steps 3–4 (tests → acceptance-tester → build → deploy upload →
+post-deploy) is long, sequential, and side-effecting. It should complete inside one
+held-open turn (see the hold-the-turn rule below), but if a turn dies unexpectedly
+mid-run (gateway crash/restart), this protocol lets a re-run of `/deploy` **resume**
+from where it stopped instead of re-running an expensive/partial deploy. Same
+mechanism as `/pipeline-tail` Step 0, keyed on the **git branch** (stable across
+turns; the openclaw session id is not).
+
+**Hold-the-turn rule (primary — this is the fix for the stall).** Run every long
+gate below **blocking, in the same turn**, streamed via the `Monitor` tool under
+`~/.claude/scripts/longrun-tick.sh`. NEVER launch a gate (test suite, acceptance
+run, build, `firebase deploy`, deploy-upload) as a detached background job and end
+the turn expecting to be re-invoked when it finishes — under `claude -p` there is no
+agent loop to resume it and the deploy stalls forever (this is exactly the bug this
+protocol was added to fix). The 600s plugin limit is an **idle** (no-output) timeout,
+not wall-clock; longrun-tick's 60s `[TICK]` keeps output flowing so the turn safely
+holds for an hour+. The checkpoint below is crash-recovery insurance, NOT a license
+to detach.
+
+At the very start of this step:
+
+1. Compute the run **identity** so resume can tell "resume MY deploy" from "a dead
+   unrelated deploy's leftover on this shared branch" (master/main is shared across
+   every deploy, so age alone can't disambiguate — this was the 2026-07-11
+   double-announce bug):
+   `ID="$(git -C "$(pwd)" rev-parse --short HEAD):<target>"` (commit + resolved
+   deploy target, e.g. `f1e4775:prod`).
+2. `pipeline-checkpoint.sh resumable deploy "$ID" $(pwd)`:
+   - **exit 0** → genuine resume of THIS deploy (same commit + target died
+     mid-run): skip every gate already in `gates_passed` (use the `passed`
+     skip-guard before each gate), re-enter at `current` (re-check its result if
+     `current_status` was `running`). Announce the resume via a `pipeline-step.sh`
+     note.
+   - **exit 1** → fresh run — either no checkpoint, OR a non-matching leftover that
+     `resumable` just garbage-collected (a different commit/target, or a crashed
+     unrelated deploy). Call `pipeline-checkpoint.sh begin deploy $(pwd) "$ID"` and
+     proceed from Step 3. Do NOT resume a checkpoint you didn't stamp — that path
+     re-logs and re-announces a deploy that isn't yours.
+
+During Steps 3–4, checkpoint each long gate with these gate names — `tests`,
+`acceptance`, `build`, `deploy`, `postdeploy`:
+
+- Before starting a gate: `pipeline-checkpoint.sh pending deploy <gate> $(pwd)`.
+- On a gate passing: `pipeline-checkpoint.sh pass deploy <gate> $(pwd)`.
+- On a gate failing: `pipeline-checkpoint.sh fail deploy <gate> $(pwd)`.
+- Skip-guard on resume: before running any gate,
+  `pipeline-checkpoint.sh passed deploy <gate> $(pwd)` (exit 0 = already passed, skip
+  it — don't re-deploy or re-upload something that already succeeded).
+
+Cleanup: on terminal `end` (success path after Step 6, or any failure path that
+stops the pipeline), call `pipeline-checkpoint.sh clear deploy $(pwd)`. Orphaned
+checkpoints (turn died mid-run, never resumed) are reaped by cron at ~48h.
+
 ### Step 3 — Pre-deploy checks
 
 **Announce start:** `~/.claude/scripts/pipeline-step.sh begin deploy "Deploy" --total 4` (covers Steps 3, 4, 5, 6).
@@ -146,6 +201,18 @@ On success: `pipeline-step.sh done deploy "Pre-Deploy Checks" --note "tests + bu
 
 On success: `pipeline-step.sh done deploy "Deploy" --note "<services-or-label>"`.
 On failure: `pipeline-step.sh fail deploy "Deploy" "<reason>"`, then `end deploy --status fail`.
+
+### Step 4b — iOS build dispatch (conditional)
+
+Runs **only if** `deploy.json` has an `ios` block AND the referenced workflow file (`.github/workflows/<ios.workflow>`) exists in the repo. Otherwise skip silently — most projects have no native iOS target.
+
+If present:
+1. Map the deploy target to the iOS environment via `ios.envMap` (e.g. `nonprod → staging`, `prod → prod`).
+2. **Announce:** `pipeline-step.sh start deploy "iOS Build" --note "<ios-env> TestFlight"`.
+3. **Dispatch:** `gh workflow run <ios.workflow> -f <ios.envInput>=<ios-env>` (default `envInput` is `environment`).
+4. **Capture the run URL:** `gh run list --workflow <ios.workflow> --limit 1 --json url --jq '.[0].url'` (the run just queued). Include it in the final deploy summary.
+5. This dispatches a **TestFlight** build — it does NOT release to the public App Store. For `prod`, the public release stays a manual "Submit for Review" + release in App Store Connect (unless `ios.autoSubmit` is `true`, which the workflow would handle separately).
+6. `pipeline-step.sh done deploy "iOS Build" --note "<ios-env> dispatched: <run-url>"`. **Non-blocking:** the web deploy already succeeded, so a dispatch failure is a WARNING in the summary, not a pipeline failure.
 
 ### Step 5 — Log
 
@@ -247,6 +314,17 @@ Example output shape (a deploy that changed the feed ranker + fixed a save bug):
 
   // Optional: hosting target name (for projects using Firebase hosting targets)
   "hostingTarget": null,
+
+  // Optional: native iOS build. When present (and the workflow file exists),
+  // Step 4b dispatches a TestFlight build via `gh workflow run` after the web
+  // deploy. envMap translates the deploy target to the workflow's env input.
+  // TestFlight only — public App Store release stays manual unless autoSubmit.
+  "ios": {
+    "workflow": "ios-build.yml",
+    "envInput": "environment",
+    "envMap": { "nonprod": "staging", "prod": "prod" },
+    "autoSubmit": false
+  },
 
   // Test commands — run before every deploy (both nonprod and prod)
   "testCommands": [
