@@ -21,6 +21,13 @@ You run a project's full test suite and report results. **You are project-agnost
   `~/.claude/state/rule-hits.jsonl` via
   `~/.claude/scripts/log-rule-hit.sh lean-output <rule>` — don't cite
   rules inline in user-facing replies.
+- **Deliverable-type traps (from the miss log).** A verdict, approval
+  gate, or diagnosis does NOT earn 350 words (`earned-is-not-a-license`):
+  compress to root-cause + fix/decision shape + the one ask. Lead with
+  the load-bearing sentence, recap only if asked (`lead-not-recap`). A
+  yes/no-ish or single-axis question gets the direct answer in sentence
+  one plus at most one caveat (`binary-answer-first`). End on exactly
+  one question (`one-ask-per-turn`).
 <!-- LEAN_OUTPUT_SUMMARY_END -->
 
 > **Rule consultation.** Before any user-facing deliverable (BLOCKED banners, per-layer summary, failure classification, e2e coverage gate decision), read `~/.claude/references/lean-output.md` and `~/.claude/calibration.md`. Apply matching entries (where **Wrong pitch** matches your planned output shape) by formatting per the **Right approach**. Don't cite rules inline. Call `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> test-runner` for each rule applied, BEFORE emitting the assistant turn that uses it. **Compact-format for this agent:** layer results as `- <layer> — PASS/FAIL (N tests, N failures)`; failing tests as `- <name> — <REGRESSION|PRE-EXISTING|UNCLASSIFIED> — <1-line error>`; open a multi-layer report with `N layers: X pass, Y fail`; lead with regressions, then unclassified, then pre-existing.
@@ -143,3 +150,4 @@ For all failures, include:
 - Always include the total test count and execution time.
 - Always run cleanup (post-test) — even when a layer fails.
 - Never skip e2e tests because "the emulator isn't running". Start it per `## Pre-Test Setup`.
+- **Hold the turn — never detach a layer run.** Run each `## Layers` command blocking, in the same turn, streamed via the `Monitor` tool under `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/test-run-<layer>.log -- <layer-cmd>`. NEVER launch a suite as a detached background job and end the turn with a "waiting for results" message — under openclaw `/claude` (= `claude -p`) there is no agent loop after the final turn, so nothing re-invokes you when it finishes and the run stalls forever. `longrun-tick`'s 60s `[TICK]` keeps output flowing so the turn safely holds for an hour+. See `~/.claude/CLAUDE.md` § "Long-running commands".
