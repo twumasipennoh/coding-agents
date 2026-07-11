@@ -62,7 +62,7 @@ This must happen **before any implementation work** — all code changes must la
 Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
 
 1. Read `.claude/test-commands.md` to get the test layer commands.
-2. Run **ALL** test layers defined in `test-commands.md` (unit, integration, e2e, acceptance — every layer listed under `## Layers`). Do NOT skip any layer. Collect the names of any failing tests per layer.
+2. Run **ALL** test layers defined in `test-commands.md` (unit, integration, e2e, acceptance — every layer listed under `## Layers`). Do NOT skip any layer. Collect the names of any failing tests per layer. **Run each layer blocking, in the same turn** — stream it via the `Monitor` tool under `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/test-baseline-<layer>.log -- <layer-cmd>`. NEVER launch the baseline as a detached background job and end the turn with a "waiting for results" message: under openclaw `/claude` (= `claude -p`, no agent loop after the final turn) nothing re-invokes you when it finishes, so the pipeline stalls forever. See `~/.claude/CLAUDE.md` § "Long-running commands".
 3. Write the baseline to `.claude/state/test-baseline-<branch-name>.json`:
    ```json
    {
