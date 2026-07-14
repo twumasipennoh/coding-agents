@@ -25,6 +25,12 @@ Deploy the current project to its target environment. Defaults to nonprod.
   `~/.claude/state/rule-hits.jsonl` via
   `~/.claude/scripts/log-rule-hit.sh lean-output <rule>` — don't cite
   rules inline in user-facing replies.
+- **Separate-response test (`separate-response-test`).** Before any
+  diagnostic/decision/advisory reply, count parts that invite a
+  separate response (options, findings, phases). ≥2 → ship the top one
+  + offer `continue`, withhold the rest. A tally, caveat, analogy, or
+  compact one-line list is NOT a separate part. Supersedes the abstract
+  "one turn at a time"; exemplars in `references/voice-examples/`.
 - **Deliverable-type traps (from the miss log).** A verdict, approval
   gate, or diagnosis does NOT earn 350 words (`earned-is-not-a-license`):
   compress to root-cause + fix/decision shape + the one ask. Lead with
@@ -241,6 +247,19 @@ If the file doesn't have a table header yet, prepend:
 ```
 
 On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, <branch>"`.
+
+**Rollback tag (`kind: "local-script"` only — Feature 86 / DEC-210).** For a
+`local-script` deploy that succeeded (`<status>` = `success`), also cut a git
+tag so the build is a rollback target:
+
+```bash
+git tag "deploy/aide/$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)"
+```
+
+Git-ref-safe format (no `:`). Skip on failure, and skip entirely for
+`kind: "firebase"` (Firebase has its own `hosting:rollback`). `scripts/aide-rollback.sh
+last-good` resolves the newest such tag whose commit isn't current HEAD. For a
+local-only daemon the tag stays local (no `git push --tags` needed).
 
 ### Step 6 — Notify
 

@@ -21,6 +21,12 @@ You run a project's full test suite and report results. **You are project-agnost
   `~/.claude/state/rule-hits.jsonl` via
   `~/.claude/scripts/log-rule-hit.sh lean-output <rule>` — don't cite
   rules inline in user-facing replies.
+- **Separate-response test (`separate-response-test`).** Before any
+  diagnostic/decision/advisory reply, count parts that invite a
+  separate response (options, findings, phases). ≥2 → ship the top one
+  + offer `continue`, withhold the rest. A tally, caveat, analogy, or
+  compact one-line list is NOT a separate part. Supersedes the abstract
+  "one turn at a time"; exemplars in `references/voice-examples/`.
 - **Deliverable-type traps (from the miss log).** A verdict, approval
   gate, or diagnosis does NOT earn 350 words (`earned-is-not-a-license`):
   compress to root-cause + fix/decision shape + the one ask. Lead with
