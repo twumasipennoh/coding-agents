@@ -29,6 +29,7 @@ side-channel-instrumentation rule).
 /rule-status by-entry         → top entries across all skills
 /rule-status misses           → violations only (overflows + chunk-then-dumps)
 /rule-status raw              → tail the last 20 lines of the log verbatim
+/rule-status directives       → captured pacing/lens directives + promotion candidates
 ```
 
 ## Steps
@@ -52,6 +53,7 @@ If the file exists but is empty, report: "Log file present but empty — same di
 - `by-entry` → window=`7d`, mode=`by-entry`
 - `misses` → window=`7d`, mode=`misses`
 - `raw` → window=`7d`, mode=`raw`
+- `directives` → window=`all`, mode=`directives`
 
 ### 3. Build the readout
 
@@ -71,6 +73,14 @@ Use `jq` if available, otherwise a Bash + awk pipeline. Compute:
   of `words` (min/median/max) for `length-overflow` entries. This is the
   "am I still running long?" view — lead with the worst overflow.
 - **Raw mode:** last 20 log lines pretty-printed.
+- **Directives mode:** run `bash ~/.claude/scripts/log-directive.sh --tally`.
+  Report the tally (count per `{type, shape, directive}`). Lead with any
+  row flagged `PROMOTE` (recurred ≥ threshold — a candidate to graduate
+  into the hard-default `LEAN_OUTPUT_SUMMARY`/Rule 6 block or the leading
+  `calibration.md` bullet) and any `known-rule-not-holding` row (a rule
+  that already exists but keeps needing to be re-stated — investigate why
+  it isn't firing, don't just re-promote). This is the "is the
+  positive-learning loop converging?" view.
 
 ### 4. Format the output per lean-output rules
 
