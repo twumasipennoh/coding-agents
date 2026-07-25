@@ -100,21 +100,26 @@ Present 2-3 approaches with pros and cons for each. Consider: complexity, mainta
 
 **GATE: Pause after this phase and wait for the user to choose or redirect before proceeding.**
 
-### Phase 2b — UI Mockup (UI features only)
-After the user chooses an approach in Phase 2, ask whether this feature needs a UI mockup. If yes, run the `/mockup` skill to generate design mockups informed by the chosen approach and the scope from Phase 1.
+### Phase 2b — Mockup (user-facing features only)
+After the user chooses an approach in Phase 2, apply the trigger and format rule in `~/.claude/references/mockup-trigger.md` to decide whether this feature needs a mockup, and in what format.
 
-**Skip this phase** if the feature is purely backend, API-only, infrastructure, or has no visual component. Ask the user if unsure.
+**Skip this phase** if the feature has no user-facing component (purely backend, API-only, infrastructure), or is trivial per the reference doc's trivial-skip. Ask the user if unsure.
 
-Steps:
+**Visual path** (new/changed UI):
 1. Based on Phase 1 findings and the chosen Phase 2 approach, identify which screens or components need mockups
 2. Run `/mockup <feature-name>` for each screen that needs a visual design
 3. The mockup skill will auto-commit, create a PR, and present the link
 4. The user reviews the mockups via the PR and approves or requests changes
 5. Iterate on the mockups if the user requests changes
 
-The approved mockups become the visual spec for Phases 3-5. Phase 3 should evaluate the approach against the approved design. Phase 5 should reference the mockups in the plan.
+**UX-only path** (behavior/flow change, no new or changed visual elements):
+1. Write a before/after description — what happens now, what happens after — per the format rule in `mockup-trigger.md`
+2. Present it to the user for approval or revision
+3. The approved description folds into `docs/prompts/FEATURE_PROMPTS.md` at Phase 5's doc-write step (no separate file)
 
-**GATE: Pause after this phase and wait for user approval of the designs before proceeding.**
+The approved mockup or before/after description becomes the spec for Phases 3-5. Phase 3 should evaluate the approach against it. Phase 5 should reference it in the plan.
+
+**GATE: Pause after this phase and wait for user approval (of the designs, or of the before/after description) before proceeding.**
 
 ### Phase 3 — Evaluate
 
@@ -129,7 +134,7 @@ Pressure-test the chosen approach:
 - User experience complexity: Does this add cognitive load for the user? Is the complexity justified by the value?
 - Onboarding needs: What type of guidance is appropriate — none, a tooltip, a first-run walkthrough? (Depends on feature and context)
 - Feature consolidation: Are there existing features that overlap or could be consolidated with this to simplify the overall experience?
-- If mockups were approved in Phase 2b, evaluate the approach against the agreed-upon design
+- If a mockup or before/after description was approved in Phase 2b, evaluate the approach against it
 
 **Testability:** Pressure-test how this feature can actually be verified end-to-end so it ships working on the first try — not "what tests should we write" (that's Phase 4) but "can we even reach this with tests, and if not, what's the closest we can get?" For trivial changes (a one-line tweak, a copy-only edit) say "trivial — no analysis needed" and move on. Otherwise cover:
 - **Per-layer reachability.** For each layer that exists in the project (unit, integration, e2e — adapt to `clarifier-context.md` if it names a specific stack), is this feature reachable? Name the layer and what's needed to reach it.
@@ -200,7 +205,7 @@ If the agent identifies a recurring pattern from known-failures that's relevant 
 **After user sign-off:** extract the E2E / Acceptance-layer scenarios from this phase and expand them into full Given/When/Then format, then write to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). The acceptance-tester parser requires multi-line GWT — the compact one-liners are for human review only. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
 
 ### Phase 5 — Plan
-Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If mockups were approved, reference them as the visual spec. Fold in the test scenarios from Phase 4 as the acceptance criterion.
+Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If a mockup was approved, reference it as the visual spec; if a before/after description was approved, reference it as the behavioral spec. Fold in the test scenarios from Phase 4 as the acceptance criterion.
 
 **Reference the Phase 1b decision.** State which path won — build, buy (and which package/app), or hybrid (and which pieces are bought vs. built). This anchors the plan so the build/buy/hybrid choice survives intact to implementation rather than getting forgotten between phases.
 
@@ -208,7 +213,7 @@ Explain what the change means in plain language — not file-level details, but 
 
 **After user confirms:** silently update docs before handing off to the feature pipeline:
 
-1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If the feature already has an entry, reconcile it rather than duplicating.
+1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If Phase 2b produced a before/after description (UX-only path), include it under a "Before/After" section. If the feature already has an entry, reconcile it rather than duplicating.
 2. **`docs/DECISIONS.md`** — append any architectural or approach decisions surfaced during the 5 phases (build/buy/hybrid choice, approach selected in Phase 2, any tradeoffs locked in Phase 3). Skip if no new decisions were made.
 3. Confirm in one line: "Updated FEATURE_PROMPTS.md (Feature N) and DECISIONS.md (N decisions)." Then invite the user to kick off `/feature`.
 
