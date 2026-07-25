@@ -84,19 +84,7 @@ Walk through each criterion with the user:
 
 Flag any concerns and propose mitigations in the same accessible style — explain what could go wrong and what safeguards will prevent it.
 
-### Phase 4 — PLAN (What the Change Means)
-
-**Goal:** Explain in plain language what the implementation will do, not which files it touches.
-
-Generate a numbered plan covering:
-1. **What new concepts are introduced?**
-2. **What existing behavior changes?** (before/after in user-visible terms)
-3. **What stays the same?** (explicitly call out things that won't break)
-4. **Step-by-step walkthrough** — as a user story
-
-Present this to the user and confirm the mental model is correct before proceeding.
-
-### Phase 5 — TEST STRATEGY (What Use Cases We're Verifying)
+### Phase 4 — TEST STRATEGY (What Use Cases We're Verifying)
 
 **Goal:** Agree on what scenarios the tests will validate.
 
@@ -108,6 +96,18 @@ Outline:
 5. **E2E tests** — identify which user flows MUST have E2E tests. A feature is NOT complete without E2E tests.
 
 Present the test plan as user-facing scenarios, not code-level details.
+
+### Phase 5 — PLAN (What the Change Means)
+
+**Goal:** Explain in plain language what the implementation will do, not which files it touches.
+
+Generate a numbered plan covering:
+1. **What new concepts are introduced?**
+2. **What existing behavior changes?** (before/after in user-visible terms)
+3. **What stays the same?** (explicitly call out things that won't break)
+4. **Step-by-step walkthrough** — as a user story
+
+Fold in the test scenarios from Phase 4 as the acceptance criterion. Present this to the user and confirm the mental model is correct before proceeding.
 
 ## Output Format
 
@@ -127,16 +127,16 @@ Understanding:
 Chosen Approach: <Option N — brief description>
 - Key trade-offs accepted: <list>
 
-What This Change Means:
-1. <plain-language step describing what the system will do differently>
-2. ...
-
 Test Use Cases:
 - Happy path: <scenario 1>, <scenario 2>, ...
 - Edge cases: <scenario>, <scenario>, ...
 - Error/recovery: <scenario>, ...
 - Regression guardrails: <what existing flows are verified>
 - E2E tests: <list of E2E scenarios that MUST be created>
+
+What This Change Means:
+1. <plain-language step describing what the system will do differently>
+2. ...
 
 Security Considerations:
 - <any concerns, or "None — no auth/redirect/template changes">
