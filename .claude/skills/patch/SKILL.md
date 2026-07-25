@@ -111,9 +111,9 @@ If the user's description reveals this isn't a bug but a missing feature or desi
 **Design tweak path:** Understand the visual/behavioral target:
 
 1. **What should this look like?** — Ask the user to describe the intended visual or behavioral result.
-2. **Mockup?** — If the tweak is non-trivial (layout change, new component state, multi-element adjustment), offer to run `/mockup` to generate a visual target before implementation. If trivial (copy change, single color swap, spacing adjustment), skip.
+2. **Mockup?** — Apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`. Non-trivial visual change (layout change, new component state, multi-element adjustment) → offer `/mockup` for a visual target, unchanged from before. Non-trivial UX-only change (flow/behavior change, no new or changed visual elements) → offer a before/after text description instead — what happens now, what happens after — kept inline, not persisted to a file. Trivial (copy change, single color swap, spacing adjustment) → skip, per the reference doc's trivial-skip.
 
-**STOP here. Wait for the user's answers (and mockup approval if applicable) before proceeding.**
+**STOP here. Wait for the user's answers (and mockup or before/after approval if applicable) before proceeding.**
 
 ### 3. Diagnosis gate (bug fixes only)
 

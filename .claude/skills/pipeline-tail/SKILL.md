@@ -201,7 +201,9 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 
 ### 6. Final output
 
-> ⚠️ **Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)` then `pipeline-step.sh end <pipeline-id> --status ok|fail` before writing any text.** The checkpoint is cleared on terminal success; the end-before-deliverable rule means the reply must be the final turn with no tool calls after it.
+> 🔒 **Single-report gate (BLOCKING, first thing in Step 6).** Run `pipeline-checkpoint.sh finish-once <pipeline-id> $(pwd)` — an atomic CAS that ensures the final GATES + PR-link message is emitted **exactly once** even if two turns resumed the same branch+pipeline checkpoint (the resume double-report bug). **exit 0** → you own the report; proceed. **exit 1** → a concurrent/earlier resume already reported; skip the `clear`/`end`/GATES message entirely and produce **no final assistant message** (stay silent), then stop.
+
+> ⚠️ **Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)` then `pipeline-step.sh end <pipeline-id> --status ok --no-telegram` before writing any text.** The checkpoint is cleared on terminal success; the end-before-deliverable rule means the reply must be the final turn with no tool calls after it. **`--no-telegram` is deliberate on the success path:** the GATES + PR-link message below is the single completion message telegram sees — the `end` ping would otherwise be a near-duplicate. stdout + the jsonl audit event still fire. (The failure-path `end` below omits `--no-telegram` and stays loud.)
 
 Emit the GATES completion log + PR link as the final message:
 

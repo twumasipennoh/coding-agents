@@ -263,6 +263,10 @@ local-only daemon the tag stays local (no `git push --tags` needed).
 
 ### Step 6 — Notify
 
+**Single-report gate (BLOCKING, first thing in Step 6).** Run `pipeline-checkpoint.sh finish-once deploy $(pwd)`. This is an atomic compare-and-swap that guarantees the final summary is emitted **exactly once** even when a leftover detached deploy and this resume both reach Step 6 (the resume double-report bug).
+- **exit 0** → you own the report. Proceed with the rest of Step 6 (announce, `end`, Verify, final summary).
+- **exit 1** → a concurrent/earlier resume of this same deploy already reported. **Skip the entire rest of Step 6** — no `start`/`done`/`end`, no Verify, no final summary. Produce **no final assistant message** (this turn stays silent; the owning turn already sent the completion). Then stop.
+
 **Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Notify" --index 4`
 
 Do nothing specific in this step beyond the helper call — the pipeline-step helper already sends a telegram message. Use the `--note` field on `end` to carry the extra context (`<project-name> to <env-label>`, commit hash, branch, deployed URL).
@@ -277,7 +281,7 @@ Typical slugs for this skill: `compact-one-liner` (per-stage summary format), `l
 
 **Deployed URL — always append a cache-bust query string.** Whenever you surface the deployed URL — in the `end` note, the final assistant summary, or any user-facing message after deploy — append `?v=<short-hash>` (the same `git rev-parse --short HEAD` value used in the log row). Reason: browsers + service workers + CDN edge caches frequently serve a stale HTML/JS bundle right after deploy, so kwaku clicks the link and sees the old build with no indication anything shipped. The cache-bust forces a fresh fetch every time. Examples: `https://habit-tracker-staging-3fd56.web.app/?v=a1b2c3d`, `http://localhost:3000/?v=a1b2c3d`. For `kind: "local-script"` deploys with no public URL, skip this — there's nothing to link. If the URL already has a query string, append with `&v=<short-hash>` instead.
 
-- **On success:** `pipeline-step.sh done deploy "Notify"`, then `pipeline-step.sh end deploy --status ok --note "<project-name> to <env-label> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>. URL: <deployed-url>?v=<short-hash>"`.
+- **On success:** `pipeline-step.sh done deploy "Notify" --no-telegram`, then `pipeline-step.sh end deploy --status ok --no-telegram --note "<project-name> to <env-label> (<nonprod|prod>). Commit: <short-hash>, Branch: <branch>. URL: <deployed-url>?v=<short-hash>"`. **The `--no-telegram` on both is deliberate:** your final assistant summary below is the single completion message telegram sees — these two would otherwise be near-duplicate "done" bubbles. stdout + the jsonl audit event still fire. (Failure `end` below stays loud.)
 - **On failure:** `pipeline-step.sh fail deploy "Notify" "<failure-reason>"`, then `pipeline-step.sh end deploy --status fail --note "<project-name> to <env-label>. <failure-reason>"`.
 
 **Post-deploy verification checklist (success only).** After calling `end`, and before emitting the final assistant message, generate a **Verify:** section tailored to what was actually deployed.

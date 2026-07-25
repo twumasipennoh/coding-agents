@@ -71,6 +71,10 @@ Spine outputs `mode: symptom` for bug reports (your default invocation). State i
 
 After Step 5 of the spine completes (Sibling sweep), proceed to the tail below.
 
+## Tail — Mockup Check
+
+Before presenting the Hypothesis, apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`: does the fix change something the user would notice (a visible symptom, not just an internal cause)? If yes and the fix is a visual change, offer `/mockup` for a target-state image. If yes and it's UX-only (behavior/flow, no visual change), produce a before/after text description — what the user sees now (the bug), what they'll see after (the fix) — inline, not persisted to a file. If the fix has no user-visible effect (internal-only), skip.
+
 ## Tail — Hypothesis (Step 6)
 
 Present your fix as a hypothesis, not a foregone conclusion:
