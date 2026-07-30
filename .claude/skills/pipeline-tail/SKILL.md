@@ -120,6 +120,27 @@ for each gate that reported failure:
 
 Gate retry counts are **independent** — each gate tracks its own retry count. If auto-fixing one gate introduces a failure in another gate, that other gate gets its own 3 retries.
 
+### F2 — Mode-aware verification loopback (Phase B test gates only)
+
+The auto-fix loop above is the **unattended** behavior. For the Phase B gates (test-runner, acceptance-tester) ONLY, it is mode-aware (see `docs/DECISIONS.md` F2). Phase A gates stay autonomous.
+
+**Detect mode.** *Unattended* if this run was spawned by `pipeline-resume-trigger.sh` / is detached / non-interactive (no live user turn available); *attended* otherwise. **When unsure, treat as unattended** — never block the auto-PR path waiting for a human who isn't there.
+
+**Unattended → autonomous (unchanged):** run the auto-fix retry loop above under the Auto-Fix Constraints, 3 retries → STOP.
+
+**Attended → propose-and-gate:** per failing Phase B gate, up to **3 propose→approve→rerun cycles**, with loop state in the pipeline checkpoint (shared with F1) under `f2_attempt`, `f2_pending`, `f2_awaiting_approval`, `f2_rejected`, `f2_ineffective`:
+
+1. **Flake filter (acceptance only):** re-run the gate once before proposing. Passes on retry → flaky, continue, no proposal.
+2. **Diagnose + propose:** invoke **fix-advocate** on the reproducible failure. Its proposal MUST be labelled **assertion-change** vs **code-change** ([test-maintenance]) and MUST respect the Auto-Fix Constraints below (an assertion-weakening "fix" is surfaced for approval, never silently applied).
+3. **No-identical-retry:** hash the proposal's (target + approach summary); if it matches `f2_rejected` or `f2_ineffective`, discard and ask fix-advocate for a different angle. Set `f2_pending` = hash, `f2_awaiting_approval` = true.
+4. **Human gate ([confirm-gate], MANDATORY):** present the proposal and WAIT for a genuine user approval turn. The `approved` transition may ONLY be driven by an actual user message — NEVER by the agent setting a flag itself. On reject → append hash to `f2_rejected`, return to step 2. On approve → clear `f2_awaiting_approval`.
+5. **Apply + rerun:** apply, re-run the gate under `longrun-tick` + `~/.claude/scripts/longrun-wait.sh <log> '\[DONE rc=' <max-min>`. Green → continue. Red → append hash to `f2_ineffective`, `f2_attempt++`, loop.
+6. **Cap → escalate-with-history:** after 3 cycles still red, STOP and report the diagnoses tried + what each changed + why each rerun failed (retain the checkpoint). Not a bare hard-fail — the history is the deliverable.
+
+**Resume mid-approval (F1↔F2 seam):** if the run dies while `f2_awaiting_approval` is true, F1 auto-resume re-reads the checkpoint and re-presents the SAME `f2_pending` proposal — never a fresh diagnosis, never a dropped fix.
+
+**Escapes:** fix-advocate can't diagnose, or user says stop → hard-fail as before. Review passes (pattern-enforcer, security, design) stay one-shot advisory — never looped.
+
 ### Auto-Fix Constraints (MANDATORY — applies to all retry attempts)
 
 When auto-fixing test-runner failures, you MUST follow these rules based on the failure classification from test-runner's output:

@@ -12,6 +12,23 @@ When implementing a feature, follow the revised pipeline defined in CLAUDE.md.
 
 ## Pipeline
 
+### Step 0 — Checkpoint resume/init (F1, checkpoint-enrolled)
+
+This skill is **checkpoint-enrolled** (see `docs/DECISIONS.md` F1). Run this before Step 0a.
+
+1. Derive the task slug from the feature name / branch (e.g. `add-user-notifications`).
+2. **Resume check:** `~/.claude/scripts/checkpoint.sh status <slug>`.
+   - `none` or `complete` → fresh run; go to init.
+   - `incomplete` → this is a **resume**: read the checkpoint (`checkpoint.sh path <slug>`), then reconcile against reality — `git log` / `git status` / `git diff` plus a test run — to see what actually landed vs what the file claims. **Trust git over the file.** Continue from the first unfinished `## Remaining` item; do NOT redo `## Done` items already reflected in git.
+3. **Init (fresh run only):** `checkpoint.sh init <slug> --goal "<one-line goal>"`.
+
+Keep the checkpoint current **eagerly** (as things happen, not at milestone-end):
+- Each decision: `checkpoint.sh note <slug> "decision: <what> — why: <why>"`.
+- On finishing a worklist item: `checkpoint.sh note <slug> "done: <item>"` then `checkpoint.sh progress <slug>` (bumps the counter the resume trigger reads to tell "progressing" from "stuck").
+- Keep `## Remaining` accurate so a fresh-context resume knows what's left.
+
+On terminal success (Step 5, after pipeline-tail confirms green): `checkpoint.sh complete <slug>` — the done-signal; the resume trigger then archives it and stops relaunching. If a run dies mid-way and auto-resume is armed (`PIPELINE_AUTORESUME=1` / arm-flag), `pipeline-resume-trigger.sh` relaunches a fresh turn that re-enters this Step 0.
+
 ### Step 0a — Verify
 Check codebase state - does backend exist? What's actually implemented? Do not assume docs are accurate — check the code.
 
