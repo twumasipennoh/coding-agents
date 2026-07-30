@@ -138,6 +138,22 @@ Gate-blocking failures: XX REGRESSION + XX NEW-FAILING (PRE-EXISTING excluded)
 E2E Gate: ✅ PASS / ❌ BLOCKED — <reason> / ⏭️ SKIPPED (no e2e layer defined)
 ```
 
+## Compact Note Format (for `pipeline-step.sh --note`)
+
+When reporting results in a single-line `pipeline-step.sh done <id> "test-runner" --note "..."` call (or any other one-line status note), use this exact template per layer, semicolon-separated — never a bare `X/Y` where X and Y are different units (a files-passed count over a tests-total count reads as a failing ratio and is the single most common misread in gate reports):
+
+  <layer>: <tests passed>/<tests total> tests passing (<files passed>/<files total> files)[, <N> skipped: <reason>]
+
+Example:
+
+  unit: 6157/6157 tests passing (542/542 files); e2e: 138/138 tests passing (41/41 files); acceptance: 60/65 tests passing (21/22 files, 5 skipped: real-claude scenarios, pre-existing, DEC-208)
+
+Rules:
+- Always lead with the **tests** passed/total ratio (not files) — that's the number people scan for.
+- Files count is a parenthetical, always labeled `files`.
+- Any skip gets its reason inline, right where the skip count appears — never a trailing unexplained "+N skip".
+- If everything passed with zero skips, omit the skip clause entirely rather than writing ", 0 skipped".
+
 **Classification rules for the auto-fix loop:**
 - **REGRESSION** and **NEW-FAILING** failures count as gate-blocking. The pipeline must fix these before proceeding.
 - **UNCLASSIFIED** failures (no baseline available) are gate-blocking (safe default).
