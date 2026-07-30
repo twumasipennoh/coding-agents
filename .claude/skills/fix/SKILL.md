@@ -52,6 +52,12 @@ A bug description is required. If none given, ask the user for one before procee
 
 ## Steps
 
+### Resume check (F1, checkpoint-enrolled — impl phase only)
+
+Before anything else: `~/.claude/scripts/checkpoint.sh status <slug>` (slug derived from the bug / branch).
+- `incomplete` (a diagnosis was persisted) → this is a **resume of the implementation phase**: read the checkpoint (`checkpoint.sh path <slug>`), reconcile against git (`git log` / `status` / `diff`) plus a test run, then **SKIP Steps 1–2** (expected-behavior + diagnosis are already done and approved) and continue the fix from the first unfinished `## Remaining` item. Trust git over the file.
+- `none` / `complete` → fresh run; proceed normally. The checkpoint is created later (Step 2a), after the diagnosis is approved — the diagnosis phase itself is NOT enrolled, so a death before that point restarts diagnosis fresh.
+
 ### 0. Auto-branch
 
 Detect the current branch. If on the base branch (`main` or `master`):
@@ -122,6 +128,16 @@ Invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
 7. **Defend** — Explain why this fix is correct and won't cause regressions.
 
 **STOP here. Present the diagnosis to the user — including sibling findings, cross-project flags, and robustness assessment — and wait for explicit approval before proceeding.**
+
+### 2a. Checkpoint init — persist the approved diagnosis (F1)
+
+Now that the diagnosis is approved, initialize the checkpoint so the **implementation phase** survives a context refresh with the agreed root cause intact (not re-diagnosed):
+
+1. Derive the task slug (e.g. `fix-<short-symptom>`).
+2. `~/.claude/scripts/checkpoint.sh init <slug> --goal "fix: <one-line symptom>"`.
+3. Persist the diagnosis: `checkpoint.sh note <slug> "diagnosis (approved): root-cause=<...>; affected-paths=<...>; proposed-change=<...>"`, then `checkpoint.sh progress <slug>`.
+
+From here keep the checkpoint current eagerly and run `checkpoint.sh complete <slug>` on terminal success — same protocol as `/feature` Step 0 (note decisions, `progress` per item, keep `## Remaining` accurate). A mid-fix death auto-resumes from this persisted diagnosis + git reconciliation.
 
 ### 2b. Test Gap Analysis (BLOCKING)
 
