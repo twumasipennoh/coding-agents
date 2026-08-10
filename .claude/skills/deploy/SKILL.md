@@ -121,11 +121,14 @@ mechanism as `/pipeline-tail` Step 0, keyed on the **git branch** (stable across
 turns; the openclaw session id is not).
 
 **Hold-the-turn rule (primary — this is the fix for the stall).** Run every long
-gate below **blocking, in the same turn**, streamed via the `Monitor` tool under
-`~/.claude/scripts/longrun-tick.sh`. NEVER launch a gate (test suite, acceptance
-run, build, `firebase deploy`, deploy-upload) as a detached background job and end
-the turn expecting to be re-invoked when it finishes — under `claude -p` there is no
-agent loop to resume it and the deploy stalls forever (this is exactly the bug this
+gate below as a **blocking `Bash` call**, in the same turn, wrapped in
+`~/.claude/scripts/longrun-tick.sh`. The blocking Bash call is what holds the turn.
+**Do NOT stream a gate via the `Monitor` tool to "wait" for it** — `Monitor` returns
+immediately, so to wait on it you'd end the turn, which is exactly the detach that
+stalls under `claude -p`. NEVER launch a gate (test suite, acceptance run, build,
+`firebase deploy`, deploy-upload) as a detached background job and end the turn
+expecting to be re-invoked when it finishes — under `claude -p` there is no agent
+loop to resume it and the deploy stalls forever (this is exactly the bug this
 protocol was added to fix). The 600s plugin limit is an **idle** (no-output) timeout,
 not wall-clock; longrun-tick's 60s `[TICK]` keeps output flowing so the turn safely
 holds for an hour+. The checkpoint below is crash-recovery insurance, NOT a license
