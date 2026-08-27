@@ -158,6 +158,7 @@ For each pre-run dependency, the cleanup command. Always runs on success AND fai
      Exit non-zero. Do not continue.
 4. **Filter against registry.** For each scenario:
    - `status: graduated` → skip (log "scenario X graduated — running N/M instead")
+   - `status: pending-demotion` → include and prefix the report with "(pending demotion — Playwright failed, re-investigating via ephemeral)"
    - `status: demoted` → include and prefix the report with "(demoted from Playwright — re-investigate)"
    - `status: active` or new → include
 5. **Pre-run setup.** Before executing any `## Pre-Run Setup` commands, verify the project's dependency directory exists — this is the most common worktree failure (git worktrees share history but not `.gitignore`d directories like `node_modules`):
@@ -207,8 +208,10 @@ For each dependency `D` with check `C` and start `S`:
    - Delete the throwaway account.
    - If deletion fails, log `LEAKED ACCOUNT: <id>` to a `leaks.log` alongside the run report. Do not suppress.
 10. **Update registry.** For each scenario in this run:
-    - PASS: increment `pass_streak`, set `last_passed_at: <today>`, set `last_pipeline_id: <pipeline-id>`. If `pass_streak >= pass_streak_threshold` AND `distinct_pipelines >= distinct_pipelines_threshold` AND `status != graduated`, **graduate**: materialize a Playwright spec into `playwright_target_dir`, set `status: graduated`, set `graduated_on: <today>`, record `playwright_path`.
-    - FAIL: reset `pass_streak: 0`. If `status: graduated` (i.e., this came in via demotion path from test-runner reporting Playwright failure), confirm `status: demoted`.
+    - PASS on a `status: pending-demotion` entry: the ephemeral re-investigation could not reproduce the Playwright failure. Do NOT silently restore `status: graduated` (one green ephemeral run doesn't prove the flake is gone). Instead reset `status: active`, reset `pass_streak: 1`, keep `distinct_pipelines` as-is, and clear `last_demotion_note`/`last_pending_demotion_at` — it re-earns graduation through the normal thresholds.
+    - PASS otherwise: increment `pass_streak`, set `last_passed_at: <today>`. Before overwriting `last_pipeline_id`: if the field is absent (first pass ever), set `distinct_pipelines: 1`; else if this run's `<pipeline-id>` differs from the stored `last_pipeline_id`, increment `distinct_pipelines`; else (same pipeline-id as last time) leave `distinct_pipelines` unchanged. Then set `last_pipeline_id: <pipeline-id>`. If `pass_streak >= pass_streak_threshold` AND `distinct_pipelines >= distinct_pipelines_threshold` AND `status != graduated`, **graduate**: materialize a Playwright spec into `playwright_target_dir`, set `status: graduated`, set `graduated_on: <today>`, record `playwright_path`.
+    - FAIL on a `status: pending-demotion` entry: confirm the demotion — set `status: demoted`, reset `pass_streak: 0`.
+    - FAIL otherwise: reset `pass_streak: 0`.
 11. **Post-run cleanup.** Run any `## Post-Run Cleanup` blocks. Always runs — on success or failure.
 12. **Report.** Emit the Output Format below. Exit non-zero if any scenario FAILED or any LEAKED ACCOUNT was logged. Exit zero only if all included scenarios passed and no leaks.
 
@@ -267,6 +270,30 @@ For ephemeral scripts (which live under `tests/acceptance/ephemeral/*` and are g
 - **Use Firebase Admin SDK for setup, NEVER REST as the test user**. Anonymous REST writes are correctly rejected by `firestore.rules` security rules; tests that bypass rules mask production bugs. The `seed-fixtures.cjs` script (Admin-SDK-based) is the canonical pattern; generated test code must NOT inline `fetch(...)` POSTs to the Firestore REST API for setup.
 - **Match the real schema exactly**. Firestore queries that `orderBy(X)` silently drop docs missing field `X`. Before generating a seed call, read the project's `*Repo.ts` / `*Service.ts` / equivalent to extract every field referenced in `orderBy`, `where`, and array accessors. Include all of them.
 - **Project id must match the running emulator**. Auth emulator routes signIn via singleProjectMode default (set by `firebase use` active alias) but Admin SDK respects explicit `projectId`. If the seed writes to project A and the Web SDK reads from project B, the scenario will see empty state. `seed-fixtures.cjs` reads `FIRESTORE_PROJECT` env override; the active alias from `.firebaserc` is the safe default.
+
+### Fixture identity namespacing (parallel-safe generation)
+
+When a scenario's `Given` seeds a NAMED catalog fixture (as opposed to a
+fresh throwaway `@ephemeral` account created solely for this scenario), the
+seed script MUST be invoked with a per-scenario suffix/namespace argument
+(e.g. `--suffix <scenario-id>`) if the project's seed script supports one,
+so that concurrent scenarios sharing the same fixture name don't race on the
+same uid, email, or any stable content-doc IDs the fixture seeds. Treat this
+as required whenever `Limits.max_parallel` > 1 and more than one scenario in
+the current generation batch references the same fixture name.
+
+- Read the fixture's own doc comments / seed-script source to confirm what
+  gets namespaced (uid, email, stable content ids) — don't assume only the
+  uid changes. Any downstream test-id, selector, or helper-function argument
+  that was written assuming a fixed fixture identity (e.g. a cache-busting
+  helper's default content id) must be passed the ACTUAL namespaced value
+  explicitly rather than relying on a stale hardcoded default.
+- If the seed script has no namespacing support, either add it (small,
+  contained change — namespace uid/email/content-ids only, don't restructure
+  the script) or keep scenarios sharing that fixture serialized
+  (`max_parallel: 1` for that batch) until it does. Don't silently raise
+  `max_parallel` for a batch of scenarios sharing an un-namespaced fixture —
+  that reintroduces the exact race this rule exists to prevent.
 
 ### Test wiring (vitest)
 
