@@ -69,6 +69,11 @@ If a layer is e2e and a gate should fire when UI files are touched but no e2e ra
 - `ui_globs`: list of git pathspec globs that REQUIRE the e2e layer to have run
 - `block_message`: single-line message printed when the gate blocks
 
+## Graduated Acceptance Demotion (optional)
+If a layer runs Playwright specs that acceptance-tester materialized via graduation (see `~/.claude/agents/acceptance-tester.md` § Graduation):
+- `layer`: name of the layer that runs graduated specs (must match one in ## Layers)
+- `registry`: path to the scenario registry, e.g. `.claude/scenario-registry.yaml`
+
 ## Pre-Test Setup (optional)
 One sub-section per dependency. Each block has:
 - `name`: dependency label
@@ -112,7 +117,11 @@ If no baseline file exists, classify all failures as `UNCLASSIFIED` and note: "N
    - Take the changeset (`git diff --name-only` against base ref or last commit).
    - If any file matches `ui_globs` AND zero tests ran in the e2e layer, BLOCK with `block_message`.
    - Otherwise PASS.
-5. Run `## Post-Test Cleanup` (always — on success or failure).
+5. Evaluate `## Graduated Acceptance Demotion` if defined:
+   - For each spec file that FAILED in the named `layer`, read `registry` (skip silently if the file doesn't exist — not every project uses acceptance-tester) and find the entry whose `playwright_path` matches the failing spec's path.
+   - If found, set that entry's `status: pending-demotion`, `last_demotion_note: <one-line failure summary>`, `last_pending_demotion_at: <today>`. Leave `pass_streak`, `distinct_pipelines`, and `graduated_on` untouched — acceptance-tester owns those on its next run.
+   - This is registry bookkeeping only; the failure itself is still reported normally in this run's Output Format, same as any other failing test.
+6. Run `## Post-Test Cleanup` (always — on success or failure).
 
 ## Output Format
 
