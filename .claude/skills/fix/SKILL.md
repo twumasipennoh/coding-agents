@@ -134,7 +134,7 @@ Invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
 Now that the diagnosis is approved, initialize the checkpoint so the **implementation phase** survives a context refresh with the agreed root cause intact (not re-diagnosed):
 
 1. Derive the task slug (e.g. `fix-<short-symptom>`).
-2. `~/.claude/scripts/checkpoint.sh init <slug> --goal "fix: <one-line symptom>"`.
+2. `~/.claude/scripts/checkpoint.sh init <slug> --goal "fix: <one-line symptom>"`, then `checkpoint.sh set <slug> branch "$(git branch --show-current)"` — the task slug is often not the literal branch name, so `/pr` and `/merged` need this explicit field to find the right checkpoint by branch rather than guessing from the filename.
 3. Persist the diagnosis: `checkpoint.sh note <slug> "diagnosis (approved): root-cause=<...>; affected-paths=<...>; proposed-change=<...>"`, then `checkpoint.sh progress <slug>`.
 
 From here keep the checkpoint current eagerly and run `checkpoint.sh complete <slug>` on terminal success — same protocol as `/feature` Step 0 (note decisions, `progress` per item, keep `## Remaining` accurate). A mid-fix death auto-resumes from this persisted diagnosis + git reconciliation.

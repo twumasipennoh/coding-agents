@@ -46,6 +46,8 @@ If already on a non-base branch, stay on it and log: "Using existing branch <nam
 
 This must happen **before any implementation work** — all code changes must land on the feature branch, not on main.
 
+Once the branch is settled, stamp it onto the checkpoint: `checkpoint.sh set <slug> branch "$(git branch --show-current)"` — the task slug is often not the literal branch name (e.g. task `f84` shipped on branch `next-segment-countdown-indicator`), so `/pr` and `/merged` need this explicit field to find the right checkpoint by branch rather than guessing from the filename.
+
 ### Step 0d — Test Baseline Snapshot
 
 Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
