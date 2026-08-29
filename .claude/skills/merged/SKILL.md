@@ -117,6 +117,7 @@ For each repo with at least one actionable branch:
 6. `git checkout <base>`.
 7. `git pull --ff-only <remote> <base>`. If this fails (divergent), abort this repo cleanly: switch back to original branch, pop stash, log the failure, continue siblings.
 8. **For each branch to delete in this repo** (one in default mode, possibly many in sweep mode): `git branch -d <branch>` (regular delete — refuses if there are unmerged commits, which is the safety net we want). If `-d` refuses, fall through to "kept — has unmerged commits" classification and continue.
+8b. **F1 checkpoint completion (best-effort, only after a successful delete in 8):** grep `.claude/state/task-*.md` frontmatter for a `branch:` field equal to `<branch>` (the F1-enrolled `/feature`/`/fix` init steps stamp this; the task slug itself is often not the literal branch name, so don't guess from the filename). If found: `checkpoint.sh complete <slug>` then `checkpoint.sh archive <slug>` — this is the definitive completion signal (PR confirmed merged, branch actually deleted), and stops the stall-escalation watchdog from re-flagging a finished task forever. If no matching checkpoint exists, skip silently.
 9. Switch back to the original branch (unless original was deleted — in that case stay on base).
 10. Pop stash if one was created. **If pop has conflicts, do NOT drop the stash**; note "stash exists in <repo> — run `git stash pop` manually."
 
