@@ -189,6 +189,8 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` to capture the pre-f
 
 After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code. The fix must cover all current-project siblings approved in Step 2.
 
+**Slice Gate check:** if this task's `FEATURE_PROMPTS.md`/checkpoint entry has `Slice Mode: enabled`, implement the fix as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` instead of one single pass — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation, as silent sub-steps inside this step. Otherwise, proceed normally.
+
 ### 5. Capture known-failure rule (semi-auto)
 
 After the fix is implemented and tests pass, propose a known-failure rule from the root cause. This step feeds the project's failure knowledge base so future features don't repeat the same mistake.
