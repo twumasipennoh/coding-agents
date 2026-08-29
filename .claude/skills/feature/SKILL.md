@@ -114,7 +114,9 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` against the current 
 
 **Proactive rule generation:** If during the trace you identify a seam type not covered by existing known-failures or script rules, emit a candidate to `~/.claude/state/wiring-rules/review-queue.jsonl`.
 
-Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps."
+**Slice Gate check:** if this task's `FEATURE_PROMPTS.md` entry has `Slice Mode: enabled`, run the implementation as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation before continuing, as silent sub-steps inside this step (no extra `pipeline-step.sh` calls per slice). Otherwise, proceed normally.
+
+Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps." (Under Slice Gate, feature-creator is invoked once per slice instead of once for the whole task.)
 
 ### Step 4 — Monitoring (feature-only)
 

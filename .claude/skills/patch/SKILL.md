@@ -211,6 +211,8 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` to capture the pre-i
 
 Make the change. Keep it minimal — do not refactor, clean up, or improve surrounding code beyond what the fix/tweak requires. For bug fixes, the implementation must cover all current-project siblings approved in Step 3.
 
+**Slice Gate check:** if this task's `FEATURE_PROMPTS.md` entry has `Slice Mode: enabled`, implement as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` instead of one single pass — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation, as silent sub-steps inside this step. Otherwise, proceed normally.
+
 ### 6. Capture known-failure rule (semi-auto, bug fixes only)
 
 **Skip this step for design tweaks.**

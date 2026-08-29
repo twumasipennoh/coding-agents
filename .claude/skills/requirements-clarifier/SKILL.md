@@ -209,11 +209,13 @@ Explain what the change means in plain language — not file-level details, but 
 
 **Reference the Phase 1b decision.** State which path won — build, buy (and which package/app), or hybrid (and which pieces are bought vs. built). This anchors the plan so the build/buy/hybrid choice survives intact to implementation rather than getting forgotten between phases.
 
+**Slice Gate (optional).** Offer an opt-in per-slice hard-gate breakdown: "want slice-by-slice checkpoints for implementation, or one pass?" Never auto-trigger this by size/complexity — offer it, don't assume it. If the user opts in, decompose the implementation sequence from this Plan into micro-slices (1 method/class/contract each), tag each `[HUMAN]` / `[AI]` / `[GATE]` per `~/.claude/references/slice-gate.md`'s taxonomy, and carry the tagged list into the `FEATURE_PROMPTS.md` write below (with a `Slice Mode: enabled` marker on the entry). If the feature entry already has a slice list from a prior run, reconcile rather than duplicate. If the user declines, write the entry with no marker — `/feature`/`/fix`/`/patch` then run their normal single-pass implementation.
+
 **GATE: Present the full summary and ask the user to confirm before proceeding to implementation.**
 
 **After user confirms:** silently update docs before handing off to the feature pipeline:
 
-1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If Phase 2b produced a before/after description (UX-only path), include it under a "Before/After" section. If the feature already has an entry, reconcile it rather than duplicating.
+1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If Slice Gate was opted into, include the tagged slice list and the `Slice Mode: enabled` marker. If Phase 2b produced a before/after description (UX-only path), include it under a "Before/After" section. If the feature already has an entry, reconcile it rather than duplicating.
 2. **`docs/DECISIONS.md`** — append any architectural or approach decisions surfaced during the 5 phases (build/buy/hybrid choice, approach selected in Phase 2, any tradeoffs locked in Phase 3). Skip if no new decisions were made.
 3. Confirm in one line: "Updated FEATURE_PROMPTS.md (Feature N) and DECISIONS.md (N decisions)." Then invite the user to kick off `/feature`.
 
