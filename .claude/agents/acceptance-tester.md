@@ -126,8 +126,8 @@ A markdown file with H2 sections. Required sections marked **(required)**.
 ## Graduation (required)
 - `pass_streak_threshold`: consecutive passes before a scenario graduates (default 3)
 - `distinct_pipelines_threshold`: across how many separate /feature pipeline runs (default 2)
-- `playwright_target_dir`: where graduated scenarios get materialized as Playwright specs (e.g., `tests/e2e/acceptance/`)
-- `playwright_runner_command`: how to run the Playwright target after graduation (e.g., `npm run test:e2e -- tests/e2e/acceptance`)
+- `playwright_target_dir`: where graduated scenarios get materialized as Playwright specs (e.g., `tests/graduated/`). **The runner must actually collect this directory** — verify, don't assume; see the graduation step's collection check. Two real projects had a target the runner could never see: one sat inside a `**/acceptance/**` ignore glob, the other was outside `testDir` entirely.
+- `playwright_runner_command`: how to run the Playwright target after graduation (e.g., `npx playwright test <playwright_target_dir> --reporter=list`). Keep it consistent with `playwright_target_dir` — if you change one, change both.
 
 ## Pre-Run Setup (optional)
 For each dependency the running app needs (db, queues, the app itself), define:
@@ -158,9 +158,27 @@ For each pre-run dependency, the cleanup command. Always runs on success AND fai
      Exit non-zero. Do not continue.
 4. **Filter against registry.** For each scenario:
    - `status: graduated` → skip (log "scenario X graduated — running N/M instead")
+   - `status: skipped-pending-feature` → **skip, and do not count as a failure.** The scenario documents behaviour for a feature that is not built yet, so it can only ever be red. Log `⏭️ <scenario-id> — skipped (pending feature: <skip_note>)` and report these in a separate "pending feature" tally, never in the failed count. Do NOT touch `pass_streak`, `last_passed_at`, or `distinct_pipelines` for these — they are out of the graduation pipeline until un-skipped. A scenario earns this status only when the behaviour is genuinely unimplemented (the source scenario should carry a matching `@pending-feature(<task>)` tag); it is NOT a way to park a real regression, which stays `active` and red.
    - `status: pending-demotion` → include and prefix the report with "(pending demotion — Playwright failed, re-investigating via ephemeral)"
    - `status: demoted` → include and prefix the report with "(demoted from Playwright — re-investigate)"
    - `status: active` or new → include
+4b. **Ground every generated spec against CURRENT source, and never silently downgrade one.**
+
+   Each generated spec carries a header line recording what it was verified against:
+
+   ```
+    * Grounding notes (verified against frontend/src + functions/src source, YYYY-MM-DD):
+   ```
+
+   That date is a claim, and it must be true. Two rules:
+
+   - **Re-verify against the source as it stands now.** Do not copy grounding notes forward from a previous version of the spec, from a sibling worktree, or from the cache. If you did not re-read the component this run, you may not stamp today's date on it.
+   - **Never replace a cached spec with one grounded earlier.** Before writing a spec, check `.claude/.acceptance-cache/` for an existing version of the same scenario. If the cached one carries a LATER grounding date than what you are about to write, prefer the cached one — it was corrected against newer source than you just grounded against.
+
+   Why this exists (2026-09-06): three F64 scenarios failed a deploy gate and were reported as product defects. They were specs grounded 2026-08-27 asserting topic-picker behaviour that `faeae4f` (08-29, "picker no longer vanishes mid-selection") and `cb29946` (09-05, uniform dismiss contract) had deliberately changed. Correct, post-fix specs had passed on 09-05 and were sitting in the cache; the regeneration served August-grounded ones instead. A survey then found **41 of 57 dated specs in the same state**. A stale spec is not evidence about the app — it fails on behaviour that was intentionally changed, which reads exactly like a regression and blocks deploys for the wrong reason.
+
+   `scripts/check-spec-grounding.js` enforces the invariant at deploy time (a spec's grounding date must be >= the last commit touching `frontend/src` / `functions/src`), but that is a backstop. Getting it right here is what keeps the run trustworthy.
+
 5. **Pre-run setup.** Before executing any `## Pre-Run Setup` commands, verify the project's dependency directory exists — this is the most common worktree failure (git worktrees share history but not `.gitignore`d directories like `node_modules`):
    - **Node.js**: check for `node_modules/` at the repo root. If missing, run `npm ci` (if `package-lock.json` is present) or `npm install`. For projects with a separate subdirectory that has its own `package.json` (e.g. `frontend/`), check and install there too. If the sidecar declares a named `dependencies` Pre-Run Setup step, honor it; otherwise auto-run `npm install`.
    - **Python**: check for `venv/` (or the configured virtualenv path). If missing, run `python -m venv venv && pip install -r requirements.txt`.
@@ -208,8 +226,13 @@ For each dependency `D` with check `C` and start `S`:
    - Delete the throwaway account.
    - If deletion fails, log `LEAKED ACCOUNT: <id>` to a `leaks.log` alongside the run report. Do not suppress.
 10. **Update registry.** For each scenario in this run:
+    - **ALWAYS, before anything outcome-specific: set `last_run_pipeline_id: <pipeline-id>` and `last_run_at: <today>`.** This stamp records *that the scenario executed*, independent of whether it passed, and it is what `scripts/check-acceptance-coverage.js` reads to prove the suite ran wide. It is deliberately separate from `last_pipeline_id`, which stays pass-only because the `distinct_pipelines` graduation math depends on that meaning. Stamp it on PASS, on FAIL, and on FAILED-INFRA alike. A scenario you did not execute must NOT be stamped — leaving it unstamped is precisely how a narrowed run gets caught.
     - PASS on a `status: pending-demotion` entry: the ephemeral re-investigation could not reproduce the Playwright failure. Do NOT silently restore `status: graduated` (one green ephemeral run doesn't prove the flake is gone). Instead reset `status: active`, reset `pass_streak: 1`, keep `distinct_pipelines` as-is, and clear `last_demotion_note`/`last_pending_demotion_at` — it re-earns graduation through the normal thresholds.
-    - PASS otherwise: increment `pass_streak`, set `last_passed_at: <today>`. Before overwriting `last_pipeline_id`: if the field is absent (first pass ever), set `distinct_pipelines: 1`; else if this run's `<pipeline-id>` differs from the stored `last_pipeline_id`, increment `distinct_pipelines`; else (same pipeline-id as last time) leave `distinct_pipelines` unchanged. Then set `last_pipeline_id: <pipeline-id>`. If `pass_streak >= pass_streak_threshold` AND `distinct_pipelines >= distinct_pipelines_threshold` AND `status != graduated`, **graduate**: materialize a Playwright spec into `playwright_target_dir`, set `status: graduated`, set `graduated_on: <today>`, record `playwright_path`.
+    - PASS otherwise: increment `pass_streak`, set `last_passed_at: <today>`. Before overwriting `last_pipeline_id`: if the field is absent (first pass ever), set `distinct_pipelines: 1`; else if this run's `<pipeline-id>` differs from the stored `last_pipeline_id`, increment `distinct_pipelines`; else (same pipeline-id as last time) leave `distinct_pipelines` unchanged. Then set `last_pipeline_id: <pipeline-id>`. If `pass_streak >= pass_streak_threshold` AND `distinct_pipelines >= distinct_pipelines_threshold` AND `status != graduated`, **graduate**: materialize a Playwright spec into `playwright_target_dir`, then **verify the runner actually collects it before recording the graduation** (below). Only if collection is confirmed: set `status: graduated`, set `graduated_on: <today>`, record `playwright_path`.
+
+      **Collection check (BLOCKING — a graduation you cannot prove runs is worse than no graduation).** After writing the spec, list the runner's collected tests and confirm the new file is among them — e.g. `npx playwright test --list` and grep for the spec path or its test title. If it is NOT collected, do **not** graduate: leave `status: active`, delete the spec you just wrote, and report the misconfiguration with the target dir and the runner's `testDir`/ignore settings.
+
+      Why this is blocking: graduation permanently SKIPS the ephemeral scenario on the grounds that a Playwright spec covers it. If that spec is never collected, the scenario is skipped by you AND ignored by the runner — zero coverage behind a green registry entry, which is undetectable downstream because a coverage gate correctly treats `graduated` as exempt. As of 2026-09-06 two of three configured projects had a target the runner could not see (Insem's was inside a `**/acceptance/**` ignore glob; HabitTracker's was outside `testDir`), and neither was noticed because no graduation had ever taken this path — every historical one instead pointed `playwright_path` at a pre-existing committed spec. A two-second `--list` grep is the difference between a real handoff and a silent hole.
     - FAIL on a `status: pending-demotion` entry: confirm the demotion — set `status: demoted`, reset `pass_streak: 0`.
     - FAIL otherwise: reset `pass_streak: 0`.
 11. **Post-run cleanup.** Run any `## Post-Run Cleanup` blocks. Always runs — on success or failure.
@@ -329,7 +352,7 @@ Scenarios:
   Duration:  X min Ys
   Cost:      $X.XX (cap: $Y.YY)
 
-Graduations: <scenario-id> → tests/e2e/acceptance/<scenario-id>.spec.ts
+Graduations: <scenario-id> → <playwright_target_dir>/<scenario-id>.spec.ts
 
 Demotions: <scenario-id> (last failed: <reason>)
 
@@ -350,7 +373,7 @@ For failures, also include:
 - Do NOT skip teardown on failure. Use try/finally semantics in every generated script.
 - Do NOT mark a scenario PASS if its Then assertion was skipped because of an exception thrown earlier (treat exceptions as FAIL or FAILED-INFRA, never PASS).
 - Distinguish `FAILED-BUG` (assertion was reached and was false) from `FAILED-INFRA` (browser-use crash, timeout, network error before the assertion could run). Both fail the run, but the diagnostic differs.
-- Never write to `tests/e2e/` outside `playwright_target_dir`. Other Playwright tests are owned by the human or by test-creator.
+- Never write Playwright specs anywhere outside `playwright_target_dir`. Other Playwright tests are owned by the human or by test-creator.
 - Always validate the scenario-registry against the filesystem at the start of the run: if a graduated scenario's `playwright_path` is missing, BLOCK with "Registry drift: graduated scenario X claims playwright_path Y, file missing — reconcile."
 
 ### Valid exit states (exhaustive — no other exit reasons permitted)
