@@ -164,7 +164,51 @@ When auto-fixing test-runner failures, you MUST follow these rules based on the 
 3. In >95% of cases, the test is correct and the code is wrong. Default to fixing application code.
 4. If you believe the test is wrong, state your reasoning in a one-line note before modifying it.
 
-After all gates in Phase A pass, proceed to Phase B. After all gates pass, proceed to Step 2.
+After all gates in Phase A pass, proceed to Phase B. After all gates pass, proceed to Step 1b.
+
+### 1b. Acceptance spec regeneration (conditional — skip silently where unsupported)
+
+**Guard first.** Run this step ONLY if the project has generated acceptance specs:
+a `scripts/check-spec-grounding.js` AND a `.claude/.acceptance-cache/` directory.
+If either is missing the project doesn't generate specs, and this step is a silent
+no-op — do not announce it, do not warn. Most projects are in that state.
+
+**Why here and not at deploy time.** The acceptance cache key includes a fingerprint
+of the watched source (Insem DEC-314), so *any* change under the watched paths
+invalidates *every* cached spec. Staleness is therefore not an exceptional
+condition — it is the normal state after every feature. Regenerating at deploy time
+means paying a multi-hour LLM job on every deploy, discovered at the worst possible
+moment: when you are trying to ship. Regenerating here, in the session that made the
+source change, keeps `main` always-deployable and leaves the deploy gate as the cheap
+assertion it should be.
+
+This was learned the hard way on 2026-09-09: a staging deploy of a merged, fully
+gated PR was blocked at the acceptance gate because all 166 specs were grounded
+against the previous commit's fingerprint, with zero cache reuse.
+
+**Procedure:**
+
+1. Check staleness: `node scripts/check-spec-grounding.js`. If it reports 0 stale,
+   note "acceptance specs current" and continue to Step 2.
+2. If stale, regenerate against the current fingerprint per the project's
+   `.claude/acceptance-config.md`, then run the suite. Wrap in a **blocking** Bash
+   call with `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/acceptance-regen.log -- <cmd>`.
+   Never launch it detached — see the hold-the-turn rule in Step 0.
+3. **Triage failures before treating any as a regression.** A spec that fails after
+   a UI change is far more often a spec written against the OLD interaction than a
+   product defect. The 2026-09-09 incident had five specs calling `.selectOption()`
+   on a control that had become a `<button>`; shipping them untriaged would have
+   manufactured five phantom regressions. Classify each failure as
+   stale-spec-vs-real-defect before fixing anything, and state the classification.
+4. Real defects go through the Step 1 auto-fix loop (same 3-retry limit, same
+   Auto-Fix Constraints).
+5. Stamp the registry only for scenarios that actually executed. Do not stamp a
+   narrowed run as if it were a full one — the coverage gate exists to catch exactly
+   that.
+
+BLOCKING on real defects. Non-blocking if regeneration cannot complete for an
+infrastructure reason — record it in the GATES log and let the deploy gate be the
+backstop, since that is what it is for.
 
 ### 2. Doc sync
 
@@ -232,7 +276,8 @@ Emit the GATES completion log + PR link as the final message:
 GATES: pattern-enforcer ✓ | security-reviewer ✓ | test-gap-auditor ✓ |
        monitoring-spec-validator ✓/DEFERRED | frontend-design-reviewer ✓/SKIPPED |
        test-runner ✓ | acceptance-tester ✓/DEFERRED/SKIPPED |
-       doc-updater ✓ | memory-review ✓ (<N> actions)
+       acceptance-regen ✓/current/N-A | doc-updater ✓ |
+       memory-review ✓ (<N> actions)
 
 Memory: <created X, updated Y, deleted Z — or "no changes">
 
