@@ -199,8 +199,15 @@ For each validated repo, sequentially:
 12b. Best-effort F1 refresh: if `.claude/state/task-*.md` in this repo has a `branch:` field matching `<branch-name>`, run `checkpoint.sh note <slug> "PR #<N> opened: <url>"` then `checkpoint.sh progress <slug>` (same rationale as single-project Step 5b). Skip silently if none.
 13. Switch back to original branch: `git checkout <original-branch>`
 14. **If a stash was created:**
-    a. `git stash pop`
+    a. Pop **by name, never bare `git stash pop`** — a bare pop takes `stash@{0}`, which is whatever is on top, and that is frequently an older stash from a previous run rather than the one you just pushed:
+
+       ```bash
+       IDX=$(git stash list | grep -n "pr-skill" | head -1 | cut -d: -f1)
+       [ -n "$IDX" ] && git stash pop "stash@{$((IDX-1))}"
+       ```
+
     b. If pop fails: **do NOT drop the stash**. Note: "Stash exists but couldn't auto-apply in <repo> — run `git stash pop` manually."
+    c. Reap redundant stashes: `~/.claude/scripts/reap-stashes.sh --quiet <repo>`. Drops only stashes whose work is already on the base branch (empty, or every tracked file byte-identical to HEAD and no untracked files); reports the rest without touching them; archives everything to `refs/stash-archive/` first. Non-blocking, always exits 0. Without this these skills accumulate orphans indefinitely — 33 across 6 repos as of 2026-09-09, oldest 5 months.
 
 **If any step fails for a repo:**
 - Attempt to restore the repo to its original state (checkout original branch, pop stash if needed)
