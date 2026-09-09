@@ -168,6 +168,21 @@ Cleanup: on terminal `end` (success path after Step 6, or any failure path that
 stops the pipeline), call `pipeline-checkpoint.sh clear deploy $(pwd)`. Orphaned
 checkpoints (turn died mid-run, never resumed) are reaped by cron at ~48h.
 
+**Also reap redundant stashes on the same terminal path:**
+`~/.claude/scripts/reap-stashes.sh --quiet $(pwd)`. Deploy's branch-switch and
+failure paths leave stashes behind, and nothing ever collected them — a
+2026-09-09 survey found 33 orphans across 6 repos, oldest 5 months, including
+`deploy-tmp` and `deploy-log-wip` entries. The reaper drops only stashes whose
+work is already on the base branch (empty, or every tracked file byte-identical
+to HEAD with no untracked files), reports everything else without touching it,
+and archives all of them to `refs/stash-archive/` first. Non-blocking, always
+exits 0 — it must never fail a deploy.
+
+Relatedly: if this skill ever pops a stash it pushed, pop it **by name**, never
+bare `git stash pop`. A bare pop takes `stash@{0}`, which on a repo with a
+backlog is usually a stranger's snapshot — that mis-pop produced conflicts in
+untouched files during the same session that prompted this note.
+
 ### Step 3 — Pre-deploy checks
 
 **Announce start:** `~/.claude/scripts/pipeline-step.sh begin deploy "Deploy" --total 4` (covers Steps 3, 4, 5, 6).

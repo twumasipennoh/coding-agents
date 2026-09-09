@@ -69,6 +69,15 @@ If already on a non-base branch, stay on it and log: "Using existing branch <nam
 
 This must happen **before any implementation work** — all code changes must land on the fix branch, not on main.
 
+**If you stash to switch branches here, pop it BY NAME, never bare `git stash pop`.** A bare pop takes `stash@{0}` — whatever is on top, which on a repo with a backlog is usually an unrelated older snapshot, and popping it conflicts files you never touched. Resolve your own entry first:
+
+```bash
+IDX=$(git stash list | grep -n "fix-branch-tmp" | head -1 | cut -d: -f1)
+[ -n "$IDX" ] && git stash pop "stash@{$((IDX-1))}"
+```
+
+Then reap what is already redundant: `~/.claude/scripts/reap-stashes.sh --quiet $(pwd)`. It drops only stashes whose work is already on the base branch (empty, or every tracked file byte-identical to HEAD with no untracked files), reports the rest untouched, and archives everything to `refs/stash-archive/` first. Non-blocking, always exits 0. This skill's `fix-branch-tmp` and `auto-stashed by /fix` entries were part of the 33-stash backlog found across 6 repos on 2026-09-09.
+
 ### 0b. Test Baseline Snapshot
 
 Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
