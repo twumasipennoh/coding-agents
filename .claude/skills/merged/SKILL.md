@@ -117,6 +117,16 @@ For each repo with at least one actionable branch:
 6. `git checkout <base>`.
 7. `git pull --ff-only <remote> <base>`. If this fails (divergent), abort this repo cleanly: switch back to original branch, pop stash, log the failure, continue siblings.
 8. **For each branch to delete in this repo** (one in default mode, possibly many in sweep mode): `git branch -d <branch>` (regular delete — refuses if there are unmerged commits, which is the safety net we want). If `-d` refuses, fall through to "kept — has unmerged commits" classification and continue.
+
+    **Read the refusal before classifying it.** `-d` also refuses with `cannot delete branch '<branch>' checked out at '<path>'` when an agent worktree still holds it — that means "a worktree is in the way," not "unmerged work exists," and reporting it as the latter is wrong. On that specific message, act on the **single path git named**, not the repo at large:
+
+    ```bash
+    git -C <repo> worktree unlock <path> 2>/dev/null
+    git -C <repo> worktree remove --force --force <path>
+    git -C <repo> branch -d <branch>          # retry once
+    ```
+
+    Only do this when `<path>` is under `.claude/worktrees/` — a hand-made worktree blocking the delete is a real signal that you're still using the branch, so report it and keep the branch. If the retry still refuses, classify by the *new* message. (Don't reach for `worktree-reap.sh --days 0` here: that would reap every agent worktree in the repo, including ones holding uncommitted work unrelated to this branch.)
 8b. **F1 checkpoint completion (best-effort, only after a successful delete in 8):** grep `.claude/state/task-*.md` frontmatter for a `branch:` field equal to `<branch>` (the F1-enrolled `/feature`/`/fix` init steps stamp this; the task slug itself is often not the literal branch name, so don't guess from the filename). If found: `checkpoint.sh complete <slug>` then `checkpoint.sh archive <slug>` — this is the definitive completion signal (PR confirmed merged, branch actually deleted), and stops the stall-escalation watchdog from re-flagging a finished task forever. If no matching checkpoint exists, skip silently.
 9. Switch back to the original branch (unless original was deleted — in that case stay on base).
 10. Pop stash if one was created. **Pop it by name, never bare `git stash pop`** — a bare pop takes `stash@{0}`, which is whatever sits on top, and that is frequently someone else's older stash rather than the one you just pushed. Resolve your own index first:
@@ -131,6 +141,12 @@ For each repo with at least one actionable branch:
 11. **Reap redundant stashes:** `~/.claude/scripts/reap-stashes.sh --quiet <repo>`. Drops only stashes whose work is already on the base branch — empty ones, and ones where every tracked file is byte-identical to HEAD with no untracked files. Everything else is reported, never dropped. Archives all of them to `refs/stash-archive/` first, so a reap is reversible. Non-blocking; always exits 0.
 
     This exists because these skills stashed on every failure path and never reaped: a 2026-09-09 survey found 33 orphans across 6 repos, the oldest 5 months old, with two repos carrying an identically-named `merged-skill-rollout-tmp` from the same rollout. None held a file absent from HEAD. The pile is also what makes a bare pop dangerous, which is why step 10 above changed.
+
+12. **Reap stale agent worktrees:** `~/.claude/scripts/worktree-reap.sh --repo <repo> --no-scratch --quiet --commit`. Removes `.claude/worktrees/agent-*` worktrees idle 14+ days (idle = newer of directory mtime and HEAD commit time). Worktrees with uncommitted changes are reported and kept unless `--force`; hand-made worktrees outside `.claude/worktrees/` are never touched without `--all`. Silent when there's nothing to reap. Non-blocking — on failure, note it and continue.
+
+    Same rationale as step 11, different pile. Agent worktrees are created with `isolation: worktree` and left **locked**, so `git worktree prune` skips them forever — a 2026-09-18 survey found 5 in Insem_SocialMediaAggregator alone, 79–93 days idle, every "uncommitted" file already present on `main`. Cleanup is event-driven here rather than a cron job: a repo only accumulates these by being worked in, so `/merged` is where they surface.
+
+    Drop `--no-scratch` only when sweeping by hand — that flag's sweep targets `~/.aide-*` test dirs, which aren't per-repo and shouldn't be tied to one project's cleanup.
 
 If any step fails for a repo: capture reason, attempt to restore (checkout original, pop stash), continue to next repo. Do not abort the entire run.
 
