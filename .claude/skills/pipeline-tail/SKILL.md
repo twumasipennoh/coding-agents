@@ -75,7 +75,9 @@ are reaped by cron at ~48h.
 
 ### 1. Run quality gates (auto-fix with retry)
 
-Run gates in this order. Each gate gets up to **3 retries** on failure. On failure: auto-fix the issue, then re-run that specific gate. If a gate exhausts its 3 retries, **STOP the entire pipeline** — do not commit, push, or create a PR. Report the persistent failure and leave the branch as-is.
+Run gates in this order. Each gate gets up to `PHASE_AUDIT_RETRY_BOUND` retries on failure. On failure: auto-fix the issue, then re-run that specific gate. If a gate exhausts its retries, **STOP the entire pipeline** — do not commit, push, or create a PR. Report the persistent failure and leave the branch as-is.
+
+> **Retry bound.** `PHASE_AUDIT_RETRY_BOUND` is declared once, in `~/.claude/references/auto-phase-protocol.md` §2. **Read** that file to resolve the value; do not restate the number here or anywhere else (`[constants-duplication]`). Its exhaustion semantics — escalate with the full attempt history rather than bare-fail, never "fix" by deleting the flagged item — apply to these gates too.
 
 **Phase A-0 — Deterministic wiring gate (pre-analysis):**
 Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` before launching the parallel agents. Pass its JSON output to **pattern-enforcer** as invocation context so it can escalate findings to semantic verification. If the script exits 2 (tool failure), log a warning and continue — don't block on tooling issues.
@@ -108,17 +110,17 @@ After Phase B completes (success or failure):
 ```
 for each gate that reported failure:
   attempt = 0
-  while attempt < 3:
+  while attempt < PHASE_AUDIT_RETRY_BOUND:
     auto-fix the reported issues (subject to Auto-Fix Constraints below)
     re-run the gate
     if gate passes: break
     attempt += 1
-  if attempt == 3:
-    STOP — report "gate <name> failed after 3 retries: <persistent issues>"
+  if attempt == PHASE_AUDIT_RETRY_BOUND:
+    STOP — report "gate <name> failed after <bound> retries: <persistent issues>"
     do NOT proceed to Step 2
 ```
 
-Gate retry counts are **independent** — each gate tracks its own retry count. If auto-fixing one gate introduces a failure in another gate, that other gate gets its own 3 retries.
+Gate retry counts are **independent** — each gate tracks its own retry count. If auto-fixing one gate introduces a failure in another gate, that other gate gets its own full budget.
 
 ### F2 — Mode-aware verification loopback (Phase B test gates only)
 
@@ -126,16 +128,16 @@ The auto-fix loop above is the **unattended** behavior. For the Phase B gates (t
 
 **Detect mode.** *Unattended* if this run was spawned by `pipeline-resume-trigger.sh` / is detached / non-interactive (no live user turn available); *attended* otherwise. **When unsure, treat as unattended** — never block the auto-PR path waiting for a human who isn't there.
 
-**Unattended → autonomous (unchanged):** run the auto-fix retry loop above under the Auto-Fix Constraints, 3 retries → STOP.
+**Unattended → autonomous (unchanged):** run the auto-fix retry loop above under the Auto-Fix Constraints, `PHASE_AUDIT_RETRY_BOUND` retries → STOP.
 
-**Attended → propose-and-gate:** per failing Phase B gate, up to **3 propose→approve→rerun cycles**, with loop state in the pipeline checkpoint (shared with F1) under `f2_attempt`, `f2_pending`, `f2_awaiting_approval`, `f2_rejected`, `f2_ineffective`:
+**Attended → propose-and-gate:** per failing Phase B gate, up to `PHASE_AUDIT_RETRY_BOUND` propose→approve→rerun cycles, with loop state in the pipeline checkpoint (shared with F1) under `f2_attempt`, `f2_pending`, `f2_awaiting_approval`, `f2_rejected`, `f2_ineffective`:
 
 1. **Flake filter (acceptance only):** re-run the gate once before proposing. Passes on retry → flaky, continue, no proposal.
 2. **Diagnose + propose:** invoke **fix-advocate** on the reproducible failure. Its proposal MUST be labelled **assertion-change** vs **code-change** ([test-maintenance]) and MUST respect the Auto-Fix Constraints below (an assertion-weakening "fix" is surfaced for approval, never silently applied).
 3. **No-identical-retry:** hash the proposal's (target + approach summary); if it matches `f2_rejected` or `f2_ineffective`, discard and ask fix-advocate for a different angle. Set `f2_pending` = hash, `f2_awaiting_approval` = true.
 4. **Human gate ([confirm-gate], MANDATORY):** present the proposal and WAIT for a genuine user approval turn. The `approved` transition may ONLY be driven by an actual user message — NEVER by the agent setting a flag itself. On reject → append hash to `f2_rejected`, return to step 2. On approve → clear `f2_awaiting_approval`.
 5. **Apply + rerun:** apply, re-run the gate under `longrun-tick` + `~/.claude/scripts/longrun-wait.sh <log> '\[DONE rc=' <max-min>`. Green → continue. Red → append hash to `f2_ineffective`, `f2_attempt++`, loop.
-6. **Cap → escalate-with-history:** after 3 cycles still red, STOP and report the diagnoses tried + what each changed + why each rerun failed (retain the checkpoint). Not a bare hard-fail — the history is the deliverable.
+6. **Cap → escalate-with-history:** after the bound is reached and it's still red, STOP and report the diagnoses tried + what each changed + why each rerun failed (retain the checkpoint). Not a bare hard-fail — the history is the deliverable.
 
 **Resume mid-approval (F1↔F2 seam):** if the run dies while `f2_awaiting_approval` is true, F1 auto-resume re-reads the checkpoint and re-presents the SAME `f2_pending` proposal — never a fresh diagnosis, never a dropped fix.
 
@@ -200,7 +202,7 @@ against the previous commit's fingerprint, with zero cache reuse.
    on a control that had become a `<button>`; shipping them untriaged would have
    manufactured five phantom regressions. Classify each failure as
    stale-spec-vs-real-defect before fixing anything, and state the classification.
-4. Real defects go through the Step 1 auto-fix loop (same 3-retry limit, same
+4. Real defects go through the Step 1 auto-fix loop (same retry bound, same
    Auto-Fix Constraints).
 5. Stamp the registry only for scenarios that actually executed. Do not stamp a
    narrowed run as if it were a full one — the coverage gate exists to catch exactly
@@ -221,7 +223,7 @@ Run the **doc-updater** agent — performs all 7 doc-sync phases:
 6. Updates `README.md` (new routes, endpoints, features)
 7. Flags items needing human attention
 
-BLOCKING — if doc-updater fails, apply the same 3-retry auto-fix loop.
+BLOCKING — if doc-updater fails, apply the same auto-fix loop and retry bound.
 
 ### 3. Memory review
 
@@ -288,20 +290,20 @@ If any gate required retries, note it: `pattern-enforcer ✓ (2 retries)`.
 
 ### Failure path
 
-If any gate exhausts its 3 retries:
+If any gate exhausts its retries:
 
-1. Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)`, then `pipeline-step.sh end <pipeline-id> --status fail --note "<gate> failed after 3 retries"`.
+1. Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)`, then `pipeline-step.sh end <pipeline-id> --status fail --note "<gate> failed after <bound> retries"`.
 2. Emit a failure report as the final message:
 
 ```
-PIPELINE FAILED — <gate-name> could not be fixed after 3 retries.
+PIPELINE FAILED — <gate-name> could not be fixed after <bound> retries.
 
 Persistent issues:
 - <issue 1>
 - <issue 2>
 
 Branch <branch-name> has uncommitted auto-fix attempts. Gates that passed:
-  pattern-enforcer ✓ | security-reviewer ✓ | test-runner ❌ (3 retries exhausted)
+  pattern-enforcer ✓ | security-reviewer ✓ | test-runner ❌ (retries exhausted)
 ```
 
 Do NOT commit, push, or create a PR on failure.
@@ -309,6 +311,6 @@ Do NOT commit, push, or create a PR on failure.
 ## Notes
 - This skill is composition-only — parent skills invoke it, users don't.
 - The parent skill owns branch creation and `pipeline-step.sh begin`. This skill owns `pipeline-step.sh end`.
-- Gate retry counts are per-gate, not total. Each gate gets 3 independent retries.
+- Gate retry counts are per-gate, not total. Each gate gets `PHASE_AUDIT_RETRY_BOUND` independent retries (declared in `~/.claude/references/auto-phase-protocol.md` §2 — **Read** it for the value).
 - Auto-fix means: read the gate's failure report, apply code/doc changes to resolve the issues, then re-run the gate.
 - The final message (GATES log + PR link) must be the last assistant turn with no tool calls after it.

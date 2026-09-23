@@ -1,8 +1,16 @@
 # /requirements-clarifier - Engineering Method Q&A
 
-> **Final output ordering (critical):** every phase ends with a GATE — a user-facing message (findings, brainstormed approaches, evaluation, test scenarios, or the plan). That GATE message is the deliverable of the phase. Do all tool calls for the phase *before* emitting it: read `clarifier-context.md`, run cross-project `Grep`, run `WebSearch`, invoke `/mockup`, etc., FIRST — then the final assistant message contains the phase findings + the GATE prompt, with **no tool calls after it**. `--output-format json` returns only the final turn's text, so any phase findings emitted before a subsequent tool call are silently dropped. Phase 1b is the highest-risk phase here (cross-project Grep + WebSearch) — collect all results, then emit the surfaced-options block + build/buy/hybrid prompt as a single closing turn.
+> **Final output ordering (critical):** every GATE phase ends with a user-facing message (findings, brainstormed approaches, evaluation, test scenarios, or the plan). That GATE message is the deliverable of the phase. Do all tool calls for the phase *before* emitting it: read `clarifier-context.md`, run cross-project `Grep`, run `WebSearch`, invoke `/mockup`, etc., FIRST — then the final assistant message contains the phase findings + the GATE prompt, with **no tool calls after it**. `--output-format json` returns only the final turn's text, so any phase findings emitted before a subsequent tool call are silently dropped. Phase 1b is the highest-risk phase here (cross-project Grep + WebSearch) — collect all results, then emit the surfaced-options block + build/buy/hybrid prompt as a single closing turn.
 
 Run the **requirements-clarifier** agent before any feature or bug fix. Walks through 5 main engineering method phases with the user, plus optional sub-phases for prior-art survey (1b) and UI mockups (2b).
+
+## Auto-phase protocol (governs which phases stop)
+
+Phases 3, 4, Phase 5's plan production, Phase 2b's UX-only path, and a trivially-skippable Phase 1b are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running any of them — it carries the phase registry (§1), the retry loop and its bound (§2), the escalation test (§3), the Mode D checklist (§4), and the closing-card format (§6).
+
+Four phases still stop for the user: **1** (scope), **1b** (build/buy — only when a genuine choice exists), **2** (approach), and **5** (the fused plan + slice card). Three when 1b is trivially skipped.
+
+Two rules that apply throughout: an auto phase **escalates immediately** if its output would edit the locked Phase 2 approach text or add/remove an item from the Phase 1 agreed scope list (§3); everything else it changes is logged to the Phase 5 closing card. And a failing Mode D verdict is **never** resolved by deleting the flagged citation, scenario, or seam.
 
 ## Per-project context
 
@@ -25,16 +33,16 @@ This overrides any later instruction in this file that lists multiple questions 
 
 **Escape hatch:** if the user says "batch them," "give me all the questions," "ask them all at once," or "I'll answer them in one go," dump the full phase's questions in a single message for that phase. Default is one-at-a-time.
 
-## Output pacing — MULTI-PART DELIVERABLES (Phases 1b, 2, 3, 4, 5)
+## Output pacing — MULTI-PART DELIVERABLES (GATE phases only: 1b, 2, 5)
 
-The pacing rule above keeps Phase 1 (Q&A-shaped) from becoming a wall of questions. The output-shaped phases — 1b prior-art options, Phase 2 brainstormed approaches, Phase 3 evaluation findings, Phase 4 test scenarios, Phase 5 plan — have the opposite failure mode: a wall of findings/options/scenarios dumped in one turn. Apply the "Multi-part answers — one beat per turn" rule from `~/.claude/CLAUDE.md`:
+The pacing rule above keeps Phase 1 (Q&A-shaped) from becoming a wall of questions. The output-shaped phases — 1b prior-art options, Phase 2 brainstormed approaches, Phase 5's closing card — have the opposite failure mode: a wall of findings/options/scenarios dumped in one turn. Apply the "Multi-part answers — one beat per turn" rule from `~/.claude/CLAUDE.md`:
 
-1. When the phase's deliverable has 3+ distinct parts (3+ surveyed options, 3 approaches, 4+ evaluation findings, 5+ test scenarios, plan with 3+ phases), open with the count + bypass: "3 approaches, going one at a time — say 'all at once' to skip."
-2. Deliver the most load-bearing part first — the one that most constrains the user's next decision. For 1b: the option you'd recommend. For Phase 2: the approach you'd lean toward. For Phase 3: the worst finding (the one that might force a Phase 2 bounce-back). For Phase 4: the riskiest scenario. For Phase 5: the user-facing change.
+1. When the phase's deliverable has 3+ distinct parts (3+ surveyed options, 3 approaches, plan with 3+ phases), open with the count + bypass: "3 approaches, going one at a time — say 'all at once' to skip."
+2. Deliver the most load-bearing part first — the one that most constrains the user's next decision. For 1b: the option you'd recommend. For Phase 2: the approach you'd lean toward. For Phase 5: the user-facing change. (Phases 3 and 4 are auto phases — their output goes to Mode D and the Phase 5 card, not to the user, so this pacing rule doesn't apply to them.)
 3. Flow into the next part as the conversation continues — don't ask "want the next one?" after each. Trust the user to interrupt, drill into a specific part, or jump to the gate.
 4. The phase's GATE prompt lands at the end of the LAST part, not bundled with part 1. The chunked parts collectively are the deliverable; the GATE is the closing turn.
 
-**Skip the chunking** for 1-2 part deliverables: a Phase 2 with only one viable approach, a Phase 5 plan that's two paragraphs, a Phase 3 with one finding. The chunking is friction; only apply it when the deliverable is genuinely long.
+**Skip the chunking** for 1-2 part deliverables: a Phase 2 with only one viable approach, a Phase 5 plan that's two paragraphs. The chunking is friction; only apply it when the deliverable is genuinely long.
 
 **Escape hatch:** same as ONE QUESTION PER TURN — "all at once," "batch them," "just dump it," "show me everything" → emit the full deliverable in a single closing turn (findings + GATE prompt together, original format).
 
@@ -74,7 +82,9 @@ Walk through four sub-sections in order. Each is a discussion, not a checklist �
 ### Phase 1b — Prior Art Survey
 Surface what already exists, both inside the user's other projects and in the wider package/app ecosystem, so the user can make an informed build/buy/hybrid decision before any approach is brainstormed in Phase 2.
 
-**Trivial-skip exit.** If the change is genuinely trivial (a one-line tweak, a copy-only edit, a clearly scoped bug fix with no architectural choice), say so at the start of this phase and ask the user to confirm skipping. If confirmed, short-circuit straight to Phase 2 with no build/buy framing.
+**Trivial-skip exit (AUTO — `clarifier-1b`).** If the change is genuinely trivial (a one-line tweak, a copy-only edit, a clearly scoped bug fix with no architectural choice), there is no build/buy choice to make and this phase does **not** stop: state the skip and the reason in one line, run the Mode D pass, and continue to Phase 2 with no build/buy framing. Don't ask the user to confirm a decision that has only one answer.
+
+A genuine choice exists when Step 1 or Step 2 below surfaces at least one adoptable option that would satisfy the Phase 1 scope. In that case the phase runs in full and the Step 4 GATE stands.
 
 **Step 1 — Cross-project grep.** Eagerly search across the user's other projects under `~/projects/*` for similar implementations. Match the convention used by `/pr` and `/merged`: iterate directories under `~/projects/` that contain a `.git`, and run `Grep` for the keywords and symbols that define the feature (component names, function names, domain terms, file-name patterns). For each hit, note the project, file path, and a one-line summary of what's there. Don't grep the current project for this — Phase 1's UX sub-section already covers within-feature bundling.
 
@@ -86,7 +96,7 @@ Surface what already exists, both inside the user's other projects and in the wi
 
 **Known limitation:** as `~/projects/*` grows past ~30 projects, the cross-project grep gets slow. If that becomes a problem, add a project allowlist or last-modified filter — out of scope for this skill version.
 
-**GATE: Pause after this phase and wait for the user to lock in the build/buy/hybrid decision before proceeding to Phase 2.**
+**GATE (conditional): if a genuine build/buy/hybrid choice exists, pause and wait for the user to lock it in before proceeding to Phase 2.** If the trivial-skip exit fired, there is no gate — the stated skip is the record.
 
 ### Phase 2 — Brainstorm
 Use the build/buy/hybrid decision locked in at Phase 1b. The 2-3 approaches you brainstorm should be approaches *within* that path, not across it:
@@ -112,16 +122,18 @@ After the user chooses an approach in Phase 2, apply the trigger and format rule
 4. The user reviews the mockups via the PR and approves or requests changes
 5. Iterate on the mockups if the user requests changes
 
-**UX-only path** (behavior/flow change, no new or changed visual elements):
+**UX-only path** (behavior/flow change, no new or changed visual elements) — **AUTO, `clarifier-2b-ux`**:
 1. Write a before/after description — what happens now, what happens after — per the format rule in `mockup-trigger.md`
-2. Present it to the user for approval or revision
-3. The approved description folds into `docs/prompts/FEATURE_PROMPTS.md` at Phase 5's doc-write step (no separate file)
+2. Run the Mode D pass on it, then continue. The description carries forward to Phase 5's closing card, where the user sees it alongside the plan — that's its approval point, not a separate stop.
+3. The description folds into `docs/prompts/FEATURE_PROMPTS.md` at Phase 5's doc-write step (no separate file)
 
-The approved mockup or before/after description becomes the spec for Phases 3-5. Phase 3 should evaluate the approach against it. Phase 5 should reference it in the plan.
+The mockup or before/after description becomes the spec for Phases 3-5. Phase 3 should evaluate the approach against it. Phase 5 should reference it in the plan.
 
-**GATE: Pause after this phase and wait for user approval (of the designs, or of the before/after description) before proceeding.**
+**No clarifier GATE.** On the visual path the mockup review happens on the `/mockup` PR. That's the `/mockup` skill's gate, not a clarifier stop — don't add a second one here. The UX-only path has no gate.
 
-### Phase 3 — Evaluate
+### Phase 3 — Evaluate (AUTO — `clarifier-3`)
+
+Runs in full, unchanged. No human stop: the output is audited by Mode D (D1 citation resolution, D2 chain-back to the locked Phase 2 approach, D5 escalation check) and retried per the protocol doc's loop. Findings that don't meet the §3 escalation bar are logged to the Phase 5 closing card.
 
 **Known failure rules injection.** Before pressure-testing, read `~/.claude/known-failures.md` (global) and `<cwd>/.claude/known-failures.md` (per-project, if it exists). Scan the rules for any whose domain tags match the technologies/APIs this feature will touch. List the matching rules by name in your output (**show-your-work**) so the audit trail is visible. Surface relevant failure modes and prevention rules in the evaluation findings below — weave them into the appropriate sub-section (e.g., a `[firebase-fcm]` rule surfaces under "Speed and performance" or "Backwards compatibility" depending on its content). Carry the filtered rule list forward into FEATURE_PROMPTS.md under a "Known Failure Rules" section for the task, so downstream agents (feature-creator, test-creator) inherit them without re-reading the sidecars.
 
@@ -143,11 +155,14 @@ Pressure-test the chosen approach:
 - **Wiring-completeness (mandatory call-chain trace).** For each new capability the feature introduces, trace the full call chain from entry point → service/logic layer → persistence/external system. Name every integration seam: the file, function/method, and specific parameters or wiring points where one layer connects to the next. Then run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` and incorporate its output — the script catches env var propagation gaps, wrapper delegation gaps, and untested routes deterministically. For anything the script flags, include it in the seam list. For what the script *can't* catch (semantic correctness — is the *right* parameter passed, is the middleware chain *complete*, does the guard cover *all* code paths touching this resource), reason explicitly and name the risk. The output of this sub-section is a **structured seam list** passed to test-creator: one line per seam, format `[file:function] → [file:function] via [parameter/import/config]`. If a seam is at risk of shipping un-wired, flag it with `[RISK]`.
 - **Proactive rule generation.** If you spot a seam type not covered by existing known-failures rules or `check-wiring.sh` script rules, emit a candidate rule. For known-failures candidates: use the standard format (domain tag, category WIRING, trigger, failure mode, prevention). For script-rule candidates: propose a concrete grep pattern, semgrep YAML, or ast-grep rule that would catch this class of gap deterministically. Append candidates to `~/.claude/state/wiring-rules/review-queue.jsonl` in JSON format: `{"source_skill":"requirements-clarifier","domain_tag":"...","rule_type":"grep|semgrep|ast-grep","pattern":"...","description":"...","timestamp":"ISO"}`. Skip if no new seam type is identified.
 
-If a testability finding materially undermines the chosen approach (e.g., the architecture makes the critical path e2e-unreachable in a way no seam can fix), say so explicitly and bounce back to Phase 2 to pick a more testable approach rather than silently patching.
+If a testability finding materially undermines the chosen approach (e.g., the architecture makes the critical path e2e-unreachable in a way no seam can fix), that **is** an edit to the locked Phase 2 approach — escalate to the user immediately per §3 of the protocol doc and bounce back to Phase 2, rather than silently patching or auditing past it.
 
-**GATE: Pause after this phase and wait for user confirmation before proceeding.**
+**No GATE.** Run the Mode D pass, then proceed to Phase 4.
 
-### Phase 4 — Test Strategy
+### Phase 4 — Test Strategy (AUTO — `clarifier-4`)
+
+Runs in full, unchanged. No human stop: Mode D adds the D3 coverage floor (every reachable layer from Phase 3 has scenarios; no layer block leaves happy/unhappy/edge empty; every e2e-unreachable seam has an approximation or an explicit manual-QA checklist) on top of D1/D2/D5.
+
 Define use cases to verify the implementation as Given/When/Then scenarios. Build on Phase 3's testability findings — the layers, seams, and approximations identified there determine what gets covered here.
 
 **Coverage mandate — ~100% of implementation paths.** Every code path the feature introduces must be exercised by at least one test. The goal is exhaustive coverage, not a representative sample. For each reachable layer, cover all three categories — never leave any of them empty:
@@ -183,7 +198,7 @@ Define use cases to verify the implementation as Given/When/Then scenarios. Buil
 
 For any e2e-unreachable seam identified in Phase 3, include explicit manual QA steps as a checklist — never stay silent.
 
-**Test Gap Audit (BLOCKING — before GATE).** After producing the scenarios, invoke the **test-gap-auditor** agent in **Mode B (Scenario Audit)**:
+**Test Gap Audit (BLOCKING on the loop, not on the user).** After producing the scenarios, invoke the **test-gap-auditor** agent in **Mode B (Scenario Audit)**. Mode B still runs in full — it feeds the Mode D retry loop instead of a user stop:
 
 **Input to the agent:**
 - The proposed test scenarios from this phase
@@ -196,22 +211,25 @@ The agent audits the proposed scenarios against its mandatory three-section chec
 2. **Layer Coverage** — for each proposed scenario, is it assigned to the right layer (unit/integration/e2e)? Are any layers missing coverage?
 3. **Wiring Coverage** — do the proposed scenarios exercise all entry points (routes, triggers, flags, component imports) the feature will introduce?
 
-If the audit finds gaps, incorporate the missing scenarios into the Phase 4 output before presenting to the user. The updated scenario list (with gaps closed) is what the user reviews.
+If the audit finds gaps, incorporate the missing scenarios into the Phase 4 output. The updated scenario list (with gaps closed) is what the Mode D pass then audits, and what the Phase 5 card summarizes.
 
 If the agent identifies a recurring pattern from known-failures that's relevant to the proposed scenarios, surface it: "Known failure rule [X] applies — scenarios already account for it" or "Known failure rule [X] applies — added scenario Y to cover it."
 
-**GATE: Pause after this phase (with audit results incorporated) and wait for user sign-off before proceeding.**
+**No GATE.** Run the Mode D pass (Mode B gaps closed first), then proceed.
 
-**After user sign-off:** extract the E2E / Acceptance-layer scenarios from this phase and expand them into full Given/When/Then format, then write to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). The acceptance-tester parser requires multi-line GWT — the compact one-liners are for human review only. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
+**After the Mode D pass:** extract the E2E / Acceptance-layer scenarios from this phase and expand them into full Given/When/Then format, then write to `tests/acceptance/scenarios/<feature-slug>.md` (derive the slug from the feature name, e.g. `feature-12-user-notifications`). The acceptance-tester parser requires multi-line GWT — the compact one-liners are for human review only. This is a silent file write, not a conversational step; confirm in one line: "Wrote N acceptance scenarios to tests/acceptance/scenarios/<feature-slug>.md." Append if the file already exists; create the directory if it doesn't. Then proceed to Phase 5.
 
-### Phase 5 — Plan
+### Phase 5 — Plan + Slice card (AUTO production, HUMAN card)
+
+The plan's *production* is an auto phase (`clarifier-5-plan`, Mode D D1/D2/D5). The **card** it produces is the closing human gate — and it's one card, carrying the plan and the slice list together. Don't ask twice.
+
 Explain what the change means in plain language — not file-level details, but what the user will experience and what the system will do differently. Describe the implementation sequence without going into code. If a mockup was approved, reference it as the visual spec; if a before/after description was approved, reference it as the behavioral spec. Fold in the test scenarios from Phase 4 as the acceptance criterion.
 
 **Reference the Phase 1b decision.** State which path won — build, buy (and which package/app), or hybrid (and which pieces are bought vs. built). This anchors the plan so the build/buy/hybrid choice survives intact to implementation rather than getting forgotten between phases.
 
-**Slice Gate (optional).** Offer an opt-in per-slice hard-gate breakdown: "want slice-by-slice checkpoints for implementation, or one pass?" Never auto-trigger this by size/complexity — offer it, don't assume it. If the user opts in, decompose the implementation sequence from this Plan into micro-slices (1 method/class/contract each), tag each `[HUMAN]` / `[AI]` / `[GATE]` per `~/.claude/references/slice-gate.md`'s taxonomy, and carry the tagged list into the `FEATURE_PROMPTS.md` write below (with a `Slice Mode: enabled` marker on the entry). If the feature entry already has a slice list from a prior run, reconcile rather than duplicate. If the user declines, write the entry with no marker — `/feature`/`/fix`/`/patch` then run their normal single-pass implementation.
+**Slice Gate (folded into the same card).** Don't ask for slicing as its own turn — the slice question rides on the closing card below, so the user answers plan-confirm and slice-mode in one reply ("go" = confirm plan, one pass; "go, sliced" = confirm plan, slice mode). Never auto-trigger slicing by size/complexity. If the user opts in, decompose the implementation sequence from this Plan into micro-slices (1 method/class/contract each), tag each `[HUMAN]` / `[AI]` / `[GATE]` per `~/.claude/references/slice-gate.md`'s taxonomy, and carry the tagged list into the `FEATURE_PROMPTS.md` write below (with a `Slice Mode: enabled` marker on the entry). If the feature entry already has a slice list from a prior run, reconcile rather than duplicate. If the user declines, write the entry with no marker — `/feature`/`/fix`/`/patch` then run their normal single-pass implementation.
 
-**GATE: Present the full summary and ask the user to confirm before proceeding to implementation.**
+**GATE — the closing card.** Present it in the withhold format from §6 of `~/.claude/references/auto-phase-protocol.md` (**Read** it): lead with two lines of user-facing change, then the named asks `plan · slices · assumptions · audit`, then the one confirm-or-redirect question. `assumptions` covers every inferred answer the run shipped on (a trivially-skipped 1b, a UX-only 2b description, inferred layer reachability); `audit` covers the per-phase `PASS on attempt N` plus every sub-escalation-bar change Phases 3/4 logged. Don't dump all four unprompted.
 
 **After user confirms:** silently update docs before handing off to the feature pipeline:
 
@@ -221,10 +239,10 @@ Explain what the change means in plain language — not file-level details, but 
 
 ## Notes
 - Do NOT write any code during this skill (except mockup HTML files in Phase 2b via the `/mockup` skill).
-- Every phase is a GATE — do not proceed until the user explicitly responds.
-- The goal is alignment, not implementation. Only proceed to the feature pipeline after the user explicitly confirms the summary.
-- If running a single phase, still pause at the end of that phase for user input.
+- Phases 1, 1b (when a genuine choice exists), 2, and 5 are GATEs — do not proceed until the user explicitly responds. Phases 3, 4, 2b-UX-only, and a trivially-skipped 1b are auto phases: audited by Mode D, not by the user.
+- The goal is alignment, not implementation. Only proceed to the feature pipeline after the user explicitly confirms the Phase 5 card.
+- If running a single phase standalone: a GATE phase pauses as usual; an auto phase emits its Mode D verdict and stops there rather than chaining onward.
 - Phase 1b runs against the *simplified* idea agreed on in Phase 1's complexity check, not the original — surveying prior art for a bloated version wastes the survey.
 - Phase 2 brainstorms approaches *within* the build/buy/hybrid path locked at Phase 1b, not across it.
 - Phase 2b mockups are auto-committed and auto-PR'd by the `/mockup` skill — never prompt about commits or PRs.
-- If a Phase 3 testability finding materially undermines the chosen approach, bounce back to Phase 2 and pick a more testable alternative rather than silently patching.
+- If a Phase 3 testability finding materially undermines the chosen approach, that clears the §3 escalation bar: escalate to the user and bounce back to Phase 2 rather than silently patching or auditing past it.

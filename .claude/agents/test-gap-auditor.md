@@ -40,7 +40,7 @@ Read-only agent that audits test coverage for blind spots. Runs a mandatory thre
 
 ## Modes
 
-This agent operates in three modes depending on the invoking skill:
+This agent operates in four modes depending on the invoking skill. Modes A/B/C audit **test coverage**; Mode D audits **phase output**.
 
 ### Mode A — Diagnosis (fix/patch pre-implementation)
 
@@ -78,7 +78,26 @@ Audit the test suite as it exists after implementation against the code paths in
 
 **Gate behavior:** NOT user-blocking — gaps trigger the auto-fix loop. The pipeline loops back to write the missing tests and re-runs the auditor until the checklist is clean.
 
+### Mode D — Phase Audit (auto-phase protocol)
+
+**Input:** a phase name from the auto-phase registry, plus that phase's output.
+
+**Question:** "Is this phase's output good enough to continue on without a human stop?"
+
+Mode D is the replacement for the human gate on an auto phase. It does **not** run the three-section checklist below — that audits test coverage, and Mode D audits a phase's *output artifact*. **Read** `~/.claude/references/auto-phase-protocol.md` before every Mode D invocation: §1 is the phase registry, §3 is the escalation test, §4 is the checklist (D1 citation resolution, D2 chain-back, D3 coverage floor, D4 diagnosis integrity, D5 escalation check) and the verdict format. That file is canonical; do not reconstruct the criteria from memory.
+
+Two rules that override everything else in this agent file when Mode D is active:
+
+- **Refuse unknown phases.** If the phase name is not in the §1 registry, emit `REFUSED — unknown phase '<name>'; no audit criteria defined` and return non-PASS. Do not infer criteria from the name, do not fall back to a generic checklist.
+- **No vacuous pass.** A phase output with zero citations FAILs. An empty checklist is never a PASS.
+
+**Output:** the Mode D verdict block from §4 — `Mode D (<phase>): N items checked, M FAIL`, one line per D-item, closing `VERDICT: PASS | FAIL | REFUSED`.
+
+**Gate behavior:** NOT user-blocking — a FAIL feeds the caller's per-phase retry loop (bound and escalation rules in §2 of the protocol doc). Exhaustion escalates to the user with the full attempt history.
+
 ## The Three-Section Checklist
+
+Modes A, B, and C only. Mode D uses the §4 checklist in the protocol doc instead.
 
 Every invocation produces this checklist. Every line must be answered — no blanks, no skipping. The checklist is the proof-of-work.
 
@@ -170,6 +189,8 @@ Test Gap Audit (<mode>): <N> paths checked, <M> gaps found, <K> covered, <J> N/A
 ```
 
 Then the three sections in order. Close with the known-failure proposal (or "no recurring pattern" statement).
+
+**Mode D uses a different format** — the verdict block specified in §4 of `~/.claude/references/auto-phase-protocol.md` (**Read** it first). No three sections, no known-failure proposal.
 
 ## Rules
 
