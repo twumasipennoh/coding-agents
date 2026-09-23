@@ -38,7 +38,7 @@
   one question (`one-ask-per-turn`).
 <!-- LEAN_OUTPUT_SUMMARY_END -->
 
-> **Rule consultation.** Before any user-facing deliverable (diagnosis output in Step 2, test gap output in Step 2b, known-failure rule in Step 5), read `~/.claude/references/lean-output.md` and `~/.claude/calibration.md`. Apply matching entries (where **Wrong pitch** matches your planned output shape) by formatting per the **Right approach**. Don't cite rules inline. Call `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> fix` for each rule applied, BEFORE the final assistant turn. **Compact-format for this skill:** diagnosis steps as `Step: 1-line finding (file:line if anchored)`; fix options as `Option X — 1-sentence behavior change (LoC + risk in parens)`; lead with the user-visible failure, not the file paths.
+> **Rule consultation.** Before any user-facing deliverable (the Step 2c diagnosis card, known-failure rule in Step 5), read `~/.claude/references/lean-output.md` and `~/.claude/calibration.md`. Apply matching entries (where **Wrong pitch** matches your planned output shape) by formatting per the **Right approach**. Don't cite rules inline. Call `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> fix` for each rule applied, BEFORE the final assistant turn. **Compact-format for this skill:** diagnosis steps as `Step: 1-line finding (file:line if anchored)`; fix options as `Option X — 1-sentence behavior change (LoC + risk in parens)`; lead with the user-visible failure, not the file paths.
 
 Fix a bug using the **fix-advocate** agent for mandatory diagnosis before any code is written.
 
@@ -56,7 +56,7 @@ A bug description is required. If none given, ask the user for one before procee
 
 Before anything else: `~/.claude/scripts/checkpoint.sh status <slug>` (slug derived from the bug / branch).
 - `incomplete` (a diagnosis was persisted) → this is a **resume of the implementation phase**: read the checkpoint (`checkpoint.sh path <slug>`), reconcile against git (`git log` / `status` / `diff`) plus a test run, then **SKIP Steps 1–2** (expected-behavior + diagnosis are already done and approved) and continue the fix from the first unfinished `## Remaining` item. Trust git over the file.
-- `none` / `complete` → fresh run; proceed normally. The checkpoint is created later (Step 2a), after the diagnosis is approved — the diagnosis phase itself is NOT enrolled, so a death before that point restarts diagnosis fresh.
+- `none` / `complete` → fresh run; proceed normally. The checkpoint is created later (Step 2a), after the diagnosis is produced and audited — the diagnosis phase itself is NOT enrolled, so a death before that point restarts diagnosis fresh.
 
 ### 0. Auto-branch
 
@@ -106,20 +106,28 @@ Capture the current test suite state BEFORE any implementation begins. This base
 
 Exception: if `.claude/test-commands.md` is missing (Step 6 above), the baseline step was skipped and this block does not apply — new/bootstrapping projects still proceed normally.
 
-### 1. Expected behavior (BLOCKING)
+### Auto-phase protocol (governs which steps stop)
 
-Before any code reading or diagnosis, understand what the user expects:
+Steps 1, 2, and 2b are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running them — §1 registers the phase names (`fix-diagnosis`, `fix-test-gap`), §2 holds the retry loop and bound, §3 the escalation test, §4 the Mode D checklist, §6 the card format.
 
-1. **What did you expect to happen?** — Ask the user to describe the correct behavior they expected when they encountered the bug.
-2. **How would you ideally want this to work?** — Ask how the feature should behave if working correctly.
+`/fix` has **one** human gate: the diagnosis card (Step 2c). Everything before it runs unattended, and every answer inferred along the way ships as a stated assumption on that card.
 
-If the user's description reveals this isn't a bug but a missing feature or design gap, flag it explicitly: "This sounds like a feature request rather than a bug fix — consider running `/feature` instead." Wait for the user to confirm direction before proceeding.
+### 1. Expected behavior (AUTO — inferred, with an escape hatch)
 
-**STOP here. Wait for the user's answers before proceeding to diagnosis.**
+Before any code reading or diagnosis, establish what the user expects. Don't ask if you can tell:
 
-### 2. Run fix-advocate — diagnosis (BLOCKING)
+1. **What did you expect to happen?** — infer from the bug report. "the login redirects in a loop" states the expectation (it shouldn't).
+2. **How would you ideally want this to work?** — infer from the surrounding code's existing contract, not from taste.
 
-Invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
+Every inferred answer becomes a line under `assumptions` on the diagnosis card, phrased as what you assumed and what you inferred it from. An assumption the user disagrees with is corrected at the card; it does not need its own stop.
+
+If the report reveals this isn't a bug but a missing feature or design gap, that's a scope change — flag it and stop: "This sounds like a feature request rather than a bug fix — consider running `/feature` instead."
+
+**Escape hatch — the one case this becomes a real stop.** If the report is too vague to produce a `file:line`-anchored root cause *at all* (no symptom you can locate, no reproduction path, no affected surface), the card can't be written. Ask the single most load-bearing question and wait. The trigger is "I can't locate the failure," **not** "I had to guess" — a guess is covered by a stated assumption.
+
+### 2. Run fix-advocate — diagnosis (AUTO — `fix-diagnosis`)
+
+Invoke the **fix-advocate** agent and complete all 7 diagnosis steps. All seven still run in full — what changes is that the output goes to Mode D and then onto the card, not to the user as its own turn:
 
 1. **Reproduce** — Confirm the bug is reproducible. Identify the exact failure condition.
 2. **Locate** — Find the file(s) and line(s) where the bug originates.
@@ -136,7 +144,7 @@ Invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
 6. **Propose fix** — Write a specific fix with rationale that covers the reported bug AND all current-project siblings identified in step 5. Describe the change without implementing it yet.
 7. **Defend** — Explain why this fix is correct and won't cause regressions.
 
-**STOP here. Present the diagnosis to the user — including sibling findings, cross-project flags, and robustness assessment — and wait for explicit approval before proceeding.**
+**No stop.** Run the Mode D pass (D1 citation resolution, D4 diagnosis integrity, D5 escalation check) and continue. Sibling findings, cross-project flags, and the robustness assessment are withheld behind the `similar` ask on the card — produced, not dumped.
 
 ### 2a. Checkpoint init — persist the approved diagnosis (F1)
 
@@ -148,9 +156,9 @@ Now that the diagnosis is approved, initialize the checkpoint so the **implement
 
 From here keep the checkpoint current eagerly and run `checkpoint.sh complete <slug>` on terminal success — same protocol as `/feature` Step 0 (note decisions, `progress` per item, keep `## Remaining` accurate). A mid-fix death auto-resumes from this persisted diagnosis + git reconciliation.
 
-### 2b. Test Gap Analysis (BLOCKING)
+### 2b. Test Gap Analysis (AUTO — `fix-test-gap`)
 
-After the user approves the fix-advocate diagnosis, invoke the **test-gap-auditor** agent in **Mode A (Diagnosis)**:
+Invoke the **test-gap-auditor** agent in **Mode A (Diagnosis)**. Mode A runs in full — its output feeds the card's `audit` ask and the Step 3 test list, not a separate user turn:
 
 **Input to the agent:**
 - The bug description from the user
@@ -165,11 +173,31 @@ The agent produces a mandatory three-section checklist answering "why didn't exi
 
 After the checklist, the agent assesses whether any gap root causes represent a **recurring pattern**. If so, it proposes a known-failure rule for user approval (same format as Step 5's known-failure capture).
 
-**STOP. Present the test gap analysis to the user and wait for explicit confirmation before proceeding.** The user may request adjustments to the gap analysis or approve the known-failure rule proposal. Do not proceed to test writing until the user confirms.
+**No stop.** Run the Mode D pass and continue to the card. Any known-failure rule the agent proposes is held for Step 5, where it gets its own approval — don't surface it twice.
 
-### 3. Write failing tests (only after approval, BLOCKING)
+### 2c. The diagnosis card (THE human gate)
 
-After the user approves, construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
+This is the single stop in `/fix`. Emit it in the withhold format from §6 of `~/.claude/references/auto-phase-protocol.md` (**Read** it first):
+
+```
+<root cause, one sentence, anchored to file:line>
+<recommended fix, one sentence>
+
+options · similar · assumptions · audit
+```
+
+Then the one confirm question. Nothing else in this turn.
+
+- `options` — alternative fixes from the Step 2 diagnosis, one line each. **Never re-diagnose** to answer this; fix-advocate already produced them.
+- `similar` — the sibling sweep and cross-project flags from Step 2's step 5.
+- `assumptions` — every inferred answer from Step 1, each with what it was inferred from.
+- `audit` — `PASS on attempt N` per auto phase, plus the Mode A gap summary.
+
+If the user replies "go" (or equivalent), everything downstream runs unattended to the `/pipeline-tail` handoff.
+
+### 3. Write failing tests (only after the card is approved, BLOCKING)
+
+After the user approves the card, construct a `fix-spec` block from the fix-advocate diagnosis and invoke **test-creator** in Mode B:
 
 ```
 fix-spec:
@@ -196,7 +224,7 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` to capture the pre-f
 
 ### 4. Write fix code (only after tests are confirmed failing)
 
-After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code. The fix must cover all current-project siblings approved in Step 2.
+After test-creator confirms failing tests exist, implement the fix. Make the minimal change necessary — do not refactor, clean up, or improve surrounding code. The fix must cover all current-project siblings identified in Step 2.
 
 **Slice Gate check:** if this task's `FEATURE_PROMPTS.md`/checkpoint entry has `Slice Mode: enabled`, implement the fix as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` instead of one single pass — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation, as silent sub-steps inside this step. Otherwise, proceed normally.
 
@@ -239,8 +267,8 @@ The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-upd
 **Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Notes
-- Do NOT write any fix code before the Expected behavior gate (Step 1) AND fix-advocate diagnosis (Step 2) are complete AND the user explicitly approves.
+- Do NOT write any fix code before fix-advocate diagnosis (Step 2) is complete, its Mode D pass is green, AND the user approves the Step 2c card.
 - Do NOT write fix code before test-creator confirms failing tests exist — this is a hard sequencing gate.
-- If the user says "just fix it", still run Expected behavior + fix-advocate first — this is non-negotiable.
+- If the user says "just fix it", still run fix-advocate and still emit the Step 2c card — this is non-negotiable. Dropping the *stop* is what the auto-phase protocol does; dropping the *analysis* is not on the table.
 - Keep the fix minimal. Resist the urge to clean up surrounding code.
 - The fix must cover all current-project siblings identified in the sibling sweep, unless the user explicitly deferred some at the 5+ threshold.

@@ -99,27 +99,37 @@ Determine whether this is a **bug fix** or a **design tweak**:
 
 State your classification and proceed.
 
-### 2. Expected behavior (BLOCKING)
+### Auto-phase protocol (governs which steps stop)
 
-**Bug fix path:** Before any code reading or diagnosis, understand what the user expects:
+Steps 2, 3, 3b, and the acceptance target-state step are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running them — §1 registers the phase names (`patch-diagnosis`, `patch-test-gap`, `patch-acceptance`), §2 holds the retry loop and bound, §3 the escalation test, §4 the Mode D checklist, §6 the card format.
 
-1. **What did you expect to happen?** — Ask the user to describe the correct behavior they expected.
-2. **How would you ideally want this to work?** — Ask how the feature should behave if working correctly.
+`/patch` has **one** human gate: the diagnosis card (Step 3c). Every answer inferred before it ships as a stated assumption on that card.
 
-If the user's description reveals this isn't a bug but a missing feature or design gap, flag it explicitly: "This sounds like a feature request rather than a bug fix — consider running `/feature` instead." Wait for the user to confirm direction before proceeding.
+### 2. Expected behavior (AUTO — inferred, with an escape hatch)
+
+**Bug fix path:** Establish what the user expects. Don't ask if you can tell:
+
+1. **What did you expect to happen?** — infer from the report; the symptom usually states the expectation.
+2. **How would you ideally want this to work?** — infer from the surrounding code's existing contract, not from taste.
+
+Each inferred answer becomes an `assumptions` line on the Step 3c card, phrased as what you assumed and what you inferred it from.
+
+If the report reveals this isn't a bug but a missing feature or design gap, that's a scope change — flag it and stop: "This sounds like a feature request rather than a bug fix — consider running `/feature` instead."
+
+**Escape hatch — the one case this becomes a real stop.** If the report is too vague to produce a `file:line`-anchored root cause *at all*, the card can't be written; ask the single most load-bearing question and wait. "I had to guess" is not the trigger — a stated assumption covers that. "I can't locate the failure" is.
 
 **Design tweak path:** Understand the visual/behavioral target:
 
 1. **What should this look like?** — Ask the user to describe the intended visual or behavioral result.
 2. **Mockup?** — Apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`. Non-trivial visual change (layout change, new component state, multi-element adjustment) → offer `/mockup` for a visual target, unchanged from before. Non-trivial UX-only change (flow/behavior change, no new or changed visual elements) → offer a before/after text description instead — what happens now, what happens after — kept inline, not persisted to a file. Trivial (copy change, single color swap, spacing adjustment) → skip, per the reference doc's trivial-skip.
 
-**STOP here. Wait for the user's answers (and mockup or before/after approval if applicable) before proceeding.**
+**Visual mockups keep their stop** — the review happens on the `/mockup` PR, which is that skill's gate. A before/after text description does **not** get its own stop; it rides the Step 3c card.
 
-### 3. Diagnosis gate (bug fixes only)
+### 3. Diagnosis (bug fixes only — AUTO, `patch-diagnosis`)
 
 **Skip this step entirely for design tweaks.**
 
-For bug fixes, invoke the **fix-advocate** agent and complete all 7 diagnosis steps:
+For bug fixes, invoke the **fix-advocate** agent and complete all 7 diagnosis steps. All seven still run in full — the output goes to Mode D and then onto the card, not to the user as its own turn:
 
 1. **Reproduce** — Confirm the bug is reproducible.
 2. **Locate** — Find the file(s) and line(s) where the bug originates.
@@ -136,13 +146,13 @@ For bug fixes, invoke the **fix-advocate** agent and complete all 7 diagnosis st
 6. **Propose fix** — Write a specific fix with rationale that covers the reported bug AND all current-project siblings identified in step 5. Describe the change without implementing it yet.
 7. **Defend** — Explain why this fix is correct and won't cause regressions.
 
-**STOP. Present the diagnosis to the user — including sibling findings, cross-project flags, and robustness assessment — and wait for explicit approval before proceeding.**
+**No stop.** Run the Mode D pass (D1 citation resolution, D4 diagnosis integrity, D5 escalation check) and continue. Sibling findings, cross-project flags, and the robustness assessment are withheld behind the `similar` ask on the card — produced, not dumped.
 
-### 3b. Test Gap Analysis (BLOCKING, bug fixes only)
+### 3b. Test Gap Analysis (bug fixes only — AUTO, `patch-test-gap`)
 
 **Skip this step for design tweaks.**
 
-After the user approves the fix-advocate diagnosis, invoke the **test-gap-auditor** agent in **Mode A (Diagnosis)**:
+Invoke the **test-gap-auditor** agent in **Mode A (Diagnosis)**. Mode A runs in full — its output feeds the card's `audit` ask and the Step 4 test list, not a separate user turn:
 
 **Input to the agent:**
 - The patch description from the user
@@ -157,7 +167,27 @@ The agent produces a mandatory three-section checklist answering "why didn't exi
 
 After the checklist, the agent assesses whether any gap root causes represent a **recurring pattern**. If so, it proposes a known-failure rule for user approval (same format as Step 6's known-failure capture).
 
-**STOP. Present the test gap analysis to the user and wait for explicit confirmation before proceeding.** Do not proceed to test writing until the user confirms.
+**No stop.** Run the Mode D pass and continue to the card. Any known-failure rule the agent proposes is held for Step 6, where it gets its own approval — don't surface it twice.
+
+### 3c. The patch card (THE human gate)
+
+This is the single stop in `/patch`. Emit it in the withhold format from §6 of `~/.claude/references/auto-phase-protocol.md` (**Read** it first):
+
+```
+<root cause (bug fix) or target state (design tweak), one sentence, anchored to file:line>
+<recommended change, one sentence>
+
+options · similar · assumptions · audit
+```
+
+Then the one confirm question. Nothing else in this turn.
+
+- `options` — alternative fixes from Step 3, one line each. **Never re-diagnose** to answer this.
+- `similar` — the sibling sweep and cross-project flags from Step 3.
+- `assumptions` — every inferred answer from Step 2, plus the acceptance target state from Step 4, each with what it was inferred from.
+- `audit` — `PASS on attempt N` per auto phase, plus the Mode A gap summary.
+
+On a design tweak the diagnosis asks are empty; say so in one line rather than offering names that resolve to nothing. If a before/after description was produced in Step 2, it is the card's first line.
 
 ### 4. Write failing tests (BLOCKING — before any implementation)
 
@@ -194,7 +224,9 @@ fix-spec:
   change-type: design-tweak
 ```
 
-**STOP. Do not implement until test-creator confirms acceptance test files exist and are failing** (they describe the intended target state, which doesn't exist yet).
+**AUTO — `patch-acceptance`.** Deriving the target state is an auto phase: state it, audit it via Mode D (D1 citation resolution — the target must cite the files and, where one exists, the mockup or before/after description), and carry it onto the Step 3c card under `assumptions`. It does **not** get its own user stop; the card is where the user corrects it.
+
+**Sequencing gate (not a user stop): do not implement until test-creator confirms acceptance test files exist and are failing** — they describe the intended target state, which doesn't exist yet. This gate is on test-creator's confirmation, not on a human reply.
 
 ~100% acceptance-layer coverage required — no unit or integration tests:
 - **Happy** — intended visual/behavioral change is present and correct.
@@ -254,8 +286,8 @@ The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-upd
 **Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
 
 ## Notes
-- For bug fixes: do NOT write code before Expected behavior gate (Step 2) + fix-advocate diagnosis (Step 3) + user approval.
+- For bug fixes: do NOT write code before fix-advocate diagnosis (Step 3) is complete, its Mode D pass is green, and the user approves the Step 3c card.
 - For bug fixes: do NOT write code before test-creator confirms failing tests exist — hard sequencing gate.
-- For design tweaks: do NOT implement before Expected behavior gate (Step 2) confirms visual target + test-creator confirms acceptance tests exist.
-- If the user explicitly says "skip gates" or "no gates", respect that and only implement.
+- For design tweaks: do NOT implement before the Step 3c card is approved and test-creator confirms acceptance tests exist.
+- If the user explicitly says "skip gates" or "no gates", respect that and only implement. Note this is different from the auto-phase protocol, which drops *stops* while keeping every gate's analysis.
 - The fix must cover all current-project siblings identified in the sibling sweep, unless the user explicitly deferred some at the 5+ threshold.
