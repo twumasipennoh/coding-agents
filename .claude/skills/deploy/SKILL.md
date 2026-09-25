@@ -110,6 +110,25 @@ Using `deploy.json.environments`:
 For `kind: "firebase"`, read the resolved `alias` and `projectId` for subsequent steps.
 For `kind: "local-script"`, the environment key itself (e.g. `"local"`) is the label used in logs + notifications — there's no cloud project ID.
 
+### Step 2a — Main branch sync check (BLOCKING)
+
+Never deploy from a `main` that doesn't match the remote — a stale local `main`
+ships old code, and an unpushed one ships code nobody else can see or roll back
+to. Runs before Step 2b because a fast-forward here changes HEAD, which the
+resume identity is keyed on.
+
+1. Resolve the default branch: `BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')`; fall back to `main`.
+2. If there's no `origin` remote → skip with a note ("no remote, sync check skipped") and continue.
+3. `git fetch origin "$BASE"`. If the fetch fails (network/auth) → stop. Don't deploy on an unverified base.
+4. `read AHEAD BEHIND < <(git rev-list --left-right --count "$BASE...origin/$BASE")`, then:
+   - **0 / 0** → in sync, continue.
+   - **behind only (AHEAD=0)** → if the current branch is `$BASE` and `git status --porcelain` is empty, run `git pull --ff-only origin "$BASE"`, note "fast-forwarded <old>→<new>", and continue. If the tree is dirty, or `$BASE` isn't checked out here, stop and say local `$BASE` is `<N>` behind `origin/$BASE` and needs a pull.
+   - **ahead (AHEAD>0, BEHIND=0)** → stop: "local `$BASE` has `<N>` unpushed commits — push or reset before deploying." Never push on the user's behalf here.
+   - **diverged (both >0)** → stop: "local `$BASE` and `origin/$BASE` have diverged (`<A>` ahead, `<B>` behind) — reconcile before deploying." Never rebase or reset automatically.
+5. If the current branch isn't `$BASE` (e.g. deploying from a task worktree), the check above still runs against the `$BASE` ref, and additionally require that HEAD is pushed: `git rev-list --count "@{u}..HEAD"` must be 0 (no upstream = stop, "branch not pushed").
+
+Stops here happen before `pipeline-step.sh begin`, so just report the reason as the final message. No announce/checkpoint cleanup is needed.
+
 ### Step 2b — Resume check + checkpoint protocol (survivability)
 
 The gate sequence in Steps 3–4 (tests → acceptance-tester → build → deploy upload →
