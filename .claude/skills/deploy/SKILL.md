@@ -120,6 +120,7 @@ resume identity is keyed on.
 1. Resolve the default branch: `BASE=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')`; fall back to `main`.
 2. If there's no `origin` remote → skip with a note ("no remote, sync check skipped") and continue.
 3. `git fetch origin "$BASE"`. If the fetch fails (network/auth) → stop. Don't deploy on an unverified base.
+3a. **Detached HEAD (a commit pinned on purpose — e.g. the Insem auto-promoter's worktree, F92).** If `git symbolic-ref -q HEAD` fails, HEAD is a bare commit, not a branch. Then the only question is whether that commit is published: `git merge-base --is-ancestor HEAD "origin/$BASE"` must succeed (else stop: "commit `<short>` is not on origin/$BASE — push it first"). Skip items 4 and 5 entirely — the state of the local `$BASE` branch is irrelevant to what ships from a pinned commit, and requiring it to be in sync would block every unattended run whenever the primary checkout lags. Note "detached HEAD `<short>` is on origin/$BASE" and continue.
 4. `read AHEAD BEHIND < <(git rev-list --left-right --count "$BASE...origin/$BASE")`, then:
    - **0 / 0** → in sync, continue.
    - **behind only (AHEAD=0)** → if the current branch is `$BASE` and `git status --porcelain` is empty, run `git pull --ff-only origin "$BASE"`, note "fast-forwarded <old>→<new>", and continue. If the tree is dirty, or `$BASE` isn't checked out here, stop and say local `$BASE` is `<N>` behind `origin/$BASE` and needs a pull.
@@ -282,6 +283,8 @@ If the file doesn't have a table header yet, prepend:
 | Date | Env | Commit | Branch | Deployed | Status |
 |------|-----|--------|--------|----------|--------|
 ```
+
+Insem only: `scripts/deploy.sh` also appends its own machine-level record to `~/.claude/state/insem-deploys.jsonl` (F92 / DEC-339), whoever writes the `DEPLOYMENTS.md` row. Don't add a second record from this step.
 
 On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, <branch>"`.
 
