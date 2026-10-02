@@ -170,9 +170,19 @@ After all gates in Phase A pass, proceed to Phase B. After all gates pass, proce
 
 ### 1b. Acceptance spec regeneration (conditional — skip silently where unsupported)
 
-**Guard first.** Run this step ONLY if the project has generated acceptance specs:
-a `scripts/check-spec-grounding.js` AND a `.claude/.acceptance-cache/` directory.
-If either is missing the project doesn't generate specs, and this step is a silent
+**Guard first.** Run this step ONLY if the project has a staleness check, in one of
+two forms:
+
+- **Date-grounded** (Insem): a `scripts/check-spec-grounding.js` AND a
+  `.claude/.acceptance-cache/` directory. Any source change makes every spec stale.
+- **Compile-based** (Jumabom): a `## Staleness` section in
+  `.claude/acceptance-config.md` with a `check_command`. A spec is stale only when it
+  no longer type-checks against current source; the command exits 0 (none stale),
+  1 (stale specs listed one per line with their first compiler error), or 2 (the
+  check itself couldn't run — record in the GATES log, non-blocking). Only the listed
+  specs are regenerated.
+
+If neither is present the project doesn't generate specs, and this step is a silent
 no-op — do not announce it, do not warn. Most projects are in that state.
 
 **Why here and not at deploy time.** The acceptance cache key includes a fingerprint
@@ -190,10 +200,13 @@ against the previous commit's fingerprint, with zero cache reuse.
 
 **Procedure:**
 
-1. Check staleness: `node scripts/check-spec-grounding.js`. If it reports 0 stale,
-   note "acceptance specs current" and continue to Step 2.
-2. If stale, regenerate against the current fingerprint per the project's
-   `.claude/acceptance-config.md`, then run the suite. Wrap in a **blocking** Bash
+1. Check staleness: `node scripts/check-spec-grounding.js` (date-grounded) or the
+   `check_command` (compile-based). If it reports 0 stale, note "acceptance specs
+   current" and continue to Step 2.
+2. If stale, regenerate per the project's `.claude/acceptance-config.md` — the whole
+   set against the current fingerprint (date-grounded), or only the listed specs from
+   their scenario files (compile-based) — then re-run the check (must exit 0) and the
+   suite. Wrap in a **blocking** Bash
    call with `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/acceptance-regen.log -- <cmd>`.
    Never launch it detached — see the hold-the-turn rule in Step 0.
 3. **Triage failures before treating any as a regression.** A spec that fails after
