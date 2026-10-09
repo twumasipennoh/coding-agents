@@ -6,6 +6,16 @@
 
 Shared tail sequence that runs after implementation is complete. Handles: quality gates with auto-fix retries, doc-updater, memory-review, commit, push, PR creation, and final GATES summary output.
 
+## Caller-ships mode (`PIPELINE_TAIL_SHIP=caller`)
+
+Check once at the start: `echo "${PIPELINE_TAIL_SHIP:-}"`. If it prints `caller`, whatever started this run pushes the branch and opens the PR itself, and this run may not. Everything else runs as written (checkpoint, every gate with its retries, doc sync, memory review, the commit), with three changes:
+
+- **Step 4:** commit only. Skip the push: `pipeline-step.sh skip <pipeline-id> "Push" "caller ships"`.
+- **Step 5:** skip it: `pipeline-step.sh skip <pipeline-id> "Create PR" "caller ships"`.
+- **Step 6:** the final message is the PR description the caller will use (the Step 5 body: Summary, Changes, Gates), with no `PR:` line.
+
+The run is unattended: F2 below takes its unattended path. Anything a step would hold for the user's approval follows the caller's instructions for deferred approvals; never block waiting.
+
 ## Input Contract
 
 The parent skill must provide:
@@ -253,11 +263,15 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 
 ### 4. Commit + push
 
+(Caller-ships mode: items 1-2 only; see "Caller-ships mode" above.)
+
 1. Stage all changed files: `git add` the specific files changed during this pipeline run (implementation files, test files, doc files, memory files). Do not use `git add -A`.
 2. Commit with a descriptive message summarizing the work. Include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`.
 3. Push the branch: `git push -u origin <branch-name>`.
 
 ### 5. Create PR
+
+(Caller-ships mode: skipped; the Step 4 commit is the hand-off.)
 
 1. Detect base branch (`main` or `master`).
 2. Check for existing PR on this branch — if one exists, return its URL instead of creating a duplicate.
@@ -286,7 +300,7 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 
 > ⚠️ **Call `pipeline-checkpoint.sh clear <pipeline-id> $(pwd)` then `pipeline-step.sh end <pipeline-id> --status ok --no-telegram` before writing any text.** The checkpoint is cleared on terminal success; the end-before-deliverable rule means the reply must be the final turn with no tool calls after it. **`--no-telegram` is deliberate on the success path:** the GATES + PR-link message below is the single completion message telegram sees — the `end` ping would otherwise be a near-duplicate. stdout + the jsonl audit event still fire. (The failure-path `end` below omits `--no-telegram` and stays loud.)
 
-Emit the GATES completion log + PR link as the final message:
+Emit the GATES completion log + PR link as the final message (caller-ships mode: the PR description instead, see above):
 
 ```
 GATES: pattern-enforcer ✓ | security-reviewer ✓ | test-gap-auditor ✓ |
