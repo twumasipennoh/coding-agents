@@ -118,6 +118,11 @@ A markdown file with H2 sections. Required sections marked **(required)**.
 - `section_pattern`: regex or literal heading marking the scenarios block (required when `kind: file`; e.g., `^## Phase 4 Scenarios$`)
 - `directory`: path to the scenarios directory (required when `kind: directory`; e.g., `tests/acceptance/scenarios/`)
 
+## Source Fingerprint (optional — a portable default is used when absent)
+- `fingerprint_command`: shell command printing a short stable hash of the product source the specs are grounded against. Must read the WORKING TREE (not a git tree SHA) and must exclude gitignored paths. See "Source fingerprint" below for why both matter.
+- `lookup_command`: shell command taking a scenario id + scenario file and printing either the absolute path of the single reusable cache entry or `MISS`. This exists so the agent never globs `<scenario-id>.*` and picks whatever it finds — the glob is how a source-stale entry gets reused despite a correct key.
+- `source_paths`: the trees the fingerprint covers, which must be the same trees the grounding header claims (e.g. `frontend/src`, `functions/src`).
+
 ## Limits (required)
 - `max_parallel`: maximum concurrent scenarios (integer, recommended 2-5)
 - `max_cost_usd`: hard token budget per run; abort if exceeded (e.g., `5.00`)
@@ -173,7 +178,7 @@ For each pre-run dependency, the cleanup command. Always runs on success AND fai
    That date is a claim, and it must be true. Two rules:
 
    - **Re-verify against the source as it stands now.** Do not copy grounding notes forward from a previous version of the spec, from a sibling worktree, or from the cache. If you did not re-read the component this run, you may not stamp today's date on it.
-   - **Never replace a cached spec with one grounded earlier.** Before writing a spec, check `.claude/.acceptance-cache/` for an existing version of the same scenario. If the cached one carries a LATER grounding date than what you are about to write, prefer the cached one — it was corrected against newer source than you just grounded against.
+   - **Never replace a cached spec with one grounded earlier — but only within a matching source fingerprint.** Before writing a spec, resolve the cache entry via the lookup command in step 7. If it returns a HIT, that entry was generated against *this* source state; if it also carries a LATER grounding date than what you are about to write, prefer it — it was corrected against newer source than you just grounded against. If the lookup returns MISS, there is no reusable entry, full stop: **do not** go looking for a same-scenario file under a different key and prefer it for having a later date. A spec grounded later against source that has since changed is not better than one grounded today against current source — it is worse, and it is exactly what this rule used to license.
 
    Why this exists (2026-09-06): three F64 scenarios failed a deploy gate and were reported as product defects. They were specs grounded 2026-08-27 asserting topic-picker behaviour that `faeae4f` (08-29, "picker no longer vanishes mid-selection") and `cb29946` (09-05, uniform dismiss contract) had deliberately changed. Correct, post-fix specs had passed on 09-05 and were sitting in the cache; the regeneration served August-grounded ones instead. A survey then found **41 of 57 dated specs in the same state**. A stale spec is not evidence about the app — it fails on behaviour that was intentionally changed, which reads exactly like a regression and blocks deploys for the wrong reason.
 
@@ -217,7 +222,13 @@ For each dependency `D` with check `C` and start `S`:
    - Parse the Given/When/Then.
    - Parse scenario tags (`@ephemeral` default, `@fixture:<name>`, `@needs-fresh-state` on a fixture to force `refresh_command_template`).
    - Compose a browser-use script (or CLI invocation for `cli` driver) that: sets up state (throwaway account or fixture login), executes the When, asserts the Then, runs teardown in a finally block.
-   - Cache key = hash of the scenario text. If a cached generation exists for this hash in `<cwd>/.claude/.acceptance-cache/`, reuse it (skip generation LLM cost). Otherwise call the LLM to generate, then store under the hash.
+   - **Cache key = hash of the scenario text AND a source fingerprint.** Never scenario text alone — see "Source fingerprint" below for why, and for how to compute it. Resolve the entry by *asking the fingerprint tool for the one legal filename* rather than globbing `<scenario-id>.*`:
+
+     ```
+     <source_fingerprint.lookup_command>   # prints an absolute path, or MISS
+     ```
+
+     On a HIT, reuse that file (skip generation LLM cost). On MISS, call the LLM to generate, then store it under the filename the tool names (`<scenario-id>.<key><file_extension>`). Do not hand-roll the hash, and do not reuse a file the tool did not name.
    - Write to `<Ephemeral Tests.location>/<scenario-id><file_extension>`.
 8. **Run in parallel.** Use `runner_command` to execute the ephemeral dir, but cap concurrency at `max_parallel`. Monitor cumulative LLM cost during execution (browser-use exposes per-action token usage); abort hard if total crosses `max_cost_usd`.
 
@@ -331,9 +342,32 @@ the current generation batch references the same fixture name.
 - Default `max_cost_usd: 5.00` covers ~10-20 scenarios per pipeline run
 - Default `max_parallel: 3` keeps backend load reasonable for emulator-backed scenarios
 
+## Source fingerprint (why the cache key is not just the scenario text)
+
+**The gap this closes (2026-09-08).** The cache key used to be a hash of the scenario text alone. Source was not in it. So when product code changed, the scenario markdown was unchanged, the hash still matched, and a spec generated against months-old source was served straight back out of the cache and written to the ephemeral dir carrying its original grounding date. Step 4b re-grounds what you *write*; it never touched what you *reuse*. On one 166-scenario run only 33 specs were actually generated — 133 came from cache and committed leftovers — and 5 of the 11 failures asserted behaviour the repo had deliberately changed weeks earlier, each one triaged as a product defect.
+
+Note that step 4b's own prose said the right thing and the run was still wrong. That is the lesson: **a prose instruction to re-ground is not a mechanism**, because the reuse path never reaches the instruction. Putting source in the key means there is no stale entry to hit in the first place.
+
+**The deliberate trade.** This largely invalidates the cache whenever product code changes. That is correct, not a regression. The cache exists to skip LLM cost when nothing relevant changed — and if source changed, the spec *must* be re-grounded, which means regenerating it. What survives is the case the cache is actually for: repeated runs at the same source state (a retry after a flake, a re-run after fixing a scenario's markdown, a second pipeline pass that touched only docs or tests).
+
+**Where the command comes from.** The fingerprint is project-specific, so it lives in the sidecar under `## Source Fingerprint`. If the sidecar declares one, use it. If the sidecar does NOT declare one, fall back to this portable default, computed once per run:
+
+```bash
+git ls-files --cached --others --exclude-standard \
+  | grep -v -e '^tests/acceptance/' -e '^\.claude/' \
+  | sort | xargs sha256sum | sha256sum | cut -c1-16
+```
+
+The default deliberately fingerprints the whole repo minus the acceptance scratch, which **over**-invalidates. That is the safe direction: over-invalidating costs LLM tokens, under-invalidating costs a false deploy block and a triage cycle chasing a phantom regression. A project that wants a tighter fingerprint declares its real source trees in the sidecar.
+
+Two properties the fingerprint must have, whichever command produces it:
+
+- **Read the working tree, not just committed state.** A git tree SHA (`git rev-parse HEAD:src`) is ~10x cheaper and wrong here: acceptance runs inside a `/feature` pipeline where the working tree is dirty by construction — that dirt is the thing under test. A tree SHA would report "source unchanged" while the uncommitted edits sat right there.
+- **Cover new files, exclude ignored ones.** `--others --exclude-standard` does both: a brand-new component invalidates the cache, while `node_modules`, build output and editor scratch stay out so the fingerprint is stable across machines and worktrees.
+
 ## Cost discipline
 
-- Cache generated scripts by scenario-text hash under `<cwd>/.claude/.acceptance-cache/`. Re-use across pipeline runs when the scenario hasn't changed.
+- Cache generated scripts under `<cwd>/.claude/.acceptance-cache/`, keyed on scenario text **plus the source fingerprint** (see above). Re-use across pipeline runs when neither the scenario nor the source has changed.
 - During execution, sample per-action LLM cost. If projected total exceeds `max_cost_usd`, abort with a partial report ("Token budget exceeded — aborted at scenario X/Y, $Z.ZZ spent").
 - Default `max_cost_usd` if sidecar omits it: `5.00`.
 

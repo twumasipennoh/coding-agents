@@ -101,6 +101,7 @@ the underlying suite command under `~/.claude/scripts/longrun-tick.sh` (per Step
 so it survives the turn ending and reports DONE independently. Mark `pass`/`fail`
 on the checkpoint when the verdict lands:
 - **test-runner** — full test suite across all layers. BLOCKING. Emulators are already running; test-runner's Pre-Test Setup should verify (check) but not re-start.
+  - **Save results for reuse.** Right before test-runner's final attempt, compute `KEY=$(~/.claude/scripts/test-result-cache.sh key)`. When it passes, recompute the key. If it's unchanged, save every layer that ran to completion: `~/.claude/scripts/test-result-cache.sh save "$KEY" "<layer>" --failing-json '<its PRE-EXISTING failures as a JSON array, [] when green>'` (exit 3 = never reusable, skip it). Write each failing test as `<file path from the repo root> > <full test title, describe blocks included>`, the same format the baseline uses. If the key changed mid-run (an auto-fix landed), save nothing. After a rebased squash merge, main gets this same key, so the next baseline reuses these results.
 - **acceptance-tester** — invoke as a full-tool agent (`subagent_type: claude`). BLOCKING if scenarios can't reach `Then` clause. Reports DEFERRED only if sidecar was auto-scaffolded (missing `.claude/acceptance-config.md`). Reports SKIPPED if `.claude/no-acceptance` present. Emulators are already running; Pre-Run Setup checks should find state = `ours` and reuse.
 
 After Phase B completes (success or failure):

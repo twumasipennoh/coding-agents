@@ -23,14 +23,14 @@ If the user asks for multiple variants, options, versions, or alternatives ("3 t
 - **Screenshot step:** Run `generate-mockup.js` once per variant HTML. Produces `<feature>-variant-{a,b,c}-{iphone12,iphone14pro,desktop}.png` (N × 3 PNGs total). When a viewport's rendered page exceeds Telegram's 20:1 photo-aspect cap, the tool auto-slices into `<feature>-variant-{letter}-{viewport}-part-{N}.png` chunks so each chunk fits the cap and album sends succeed.
 - **Telegram step:** Send THREE albums instead of one — one per viewport — so each form factor tiles cleanly. **Pass `-d`** so each PNG is uploaded via `sendDocument` (preserves the original bytes — `sendPhoto` would JPEG-re-encode and downscale to ~1280px wide, blurring the dense text and chrome in mockup screenshots). The globs use `*` after the viewport name so they catch any auto-sliced `-part-N.png` chunks the screenshot tool produced:
   ```bash
-  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants — iPhone 12" \
+  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants - iPhone 12" \
     docs/mockups/<feature>-variant-*-iphone12*.png
-  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants — iPhone 14 Pro" \
+  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants - iPhone 14 Pro" \
     docs/mockups/<feature>-variant-*-iphone14pro*.png
-  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants — desktop" \
+  ~/.claude/scripts/telegram-send-media.sh -d -m "<feature> variants - desktop" \
     docs/mockups/<feature>-variant-*-desktop*.png
   ```
-  If any album send still gets rejected, `telegram-send-media.sh` auto-falls-back to per-file sends so each file retries through `sendDocument` directly.
+  Run the three sends as three separate Bash calls, never chained — see step 4's **Send rules**. If any album send still gets rejected, `telegram-send-media.sh` auto-falls-back to per-file sends so each file retries through `sendDocument` directly.
 - **Commit/PR step:** `git add docs/mockups/<feature>-variant-*.{html,png}` catches all N HTMLs and 3N PNGs. Branch: `mockup/<feature>-variants`. Commit: `docs: add <feature> UI mockup variants`.
 
 Single-mockup mode (one design, no variants) is unchanged — keep the existing single-file flow.
@@ -90,6 +90,11 @@ After screenshots are captured, ship them to the bound telegram chat as a docume
 ```
 
 The helper auto-derives the chat from `OPENCLAW_CHAT_ID` (or the cwd) and exits 0 silently if no chat is bound (IDE sessions). Always call it — no conditional needed. The PR link in step 5 still goes out, so this augments rather than replaces the existing reply.
+
+**Send rules (worktree sessions).** In a worktree-isolated session, Claude Code refuses any Bash command it can't verify stays off git — chaining a send with other commands (`;`, `&&`, `| tail`, `echo rc=$?`) gets the whole send refused. So:
+- Run each `telegram-send-media.sh` call as **its own plain Bash call** — nothing before or after it in the same command. Check the result from the tool's exit status, not an appended `echo`.
+- Keep captions plain ASCII (`-` not `—`).
+- Send before any branch switch. To re-send after the session has left the mockup branch (the PNGs are gone from disk), copy them out first with `git show mockup/<feature-name>:docs/mockups/<file>.png > /tmp/<file>.png` and send the `/tmp` copies.
 
 ### 5. Commit, PR, and present
 

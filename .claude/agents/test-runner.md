@@ -99,6 +99,8 @@ The calling skill may provide a baseline file at `.claude/state/test-baseline-<b
    }
    ```
    To build the flat set of all pre-existing failures, collect all test names across all values in `failing_by_layer`. Legacy baselines with a flat `"failing": [...]` array are also accepted — use the array directly.
+
+   Baseline test names use the format `<file path from the repo root> > <full test title, describe blocks included>` (e.g. `tests/auth.test.ts > sign-in > rejects a bad token`), and may come from a saved earlier run rather than this branch's baseline run. Write every failure you observe in that same format before matching, and in your report. Don't match on the title alone.
 2. **Classify each failure** in the current run:
    - Test name appears in the baseline's failing set → **PRE-EXISTING** (was already broken before our changes)
    - Test name does NOT appear in the baseline's failing set AND the test file was created by test-creator in this pipeline run → **NEW-FAILING** (test-creator's test that implementation should satisfy)
