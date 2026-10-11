@@ -249,7 +249,12 @@ fi
 # ── deploy: delegate to the project's deploy commands, or assemble it here ────
 if (( DELEGATE )); then
 	rc=0
-	for c in "${DEPLOY_CMDS[@]}"; do say "+ deploy: $c"; bash -c "$c" >&2 || { rc=$?; break; }; done
+	# FIREBASE_ROLLBACK=1 tells the project's deploy command it is redeploying
+	# code that was already live (Insem's deploy.sh then skips its test and
+	# acceptance gates, and treats --confirm as prod's confirmation).
+	# FIREBASE_ROLLBACK_SHA binds that to this exact checkout.
+	ROLLBACK_SHA="$(git rev-parse HEAD)"
+	for c in "${DEPLOY_CMDS[@]}"; do say "+ deploy: $c"; FIREBASE_ROLLBACK=1 FIREBASE_ROLLBACK_SHA="$ROLLBACK_SHA" bash -c "$c" >&2 || { rc=$?; break; }; done
 else
 	if (( RUN_TESTS )); then
 		for c in "${TEST_CMDS[@]}"; do say "+ test: $c"; bash -c "$c" >&2 || die 8 "tests failed: $c"; done

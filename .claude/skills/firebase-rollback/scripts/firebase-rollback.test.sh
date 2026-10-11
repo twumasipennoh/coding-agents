@@ -243,6 +243,13 @@ app="$(mkdelegate)"; B="$(sha_of "$app" HEAD~1)"
 B="$(sha_of "$app" HEAD~1)"
 r="$(run "$app" staging "$B")"; rc=$?
 aeq  "delegate fail → rc propagated" "$rc" "4"
+# delegate marks the deploy as a rollback for the project's deploy command
+app="$(mkdelegate)"
+( cd "$app" && printf '%s' '{"platform":"firebase","environments":{"staging":{"projectId":"del","nonprod":true}},"deployCommands":{"staging":["echo ROLLBACK-FLAG=$FIREBASE_ROLLBACK SHA-MATCH=$([[ $FIREBASE_ROLLBACK_SHA == $(git rev-parse HEAD) ]] && echo yes)"]}}' > .claude/deploy.json && git commit -qam patch ) >/dev/null 2>&1
+B="$(sha_of "$app" HEAD~1)"
+r="$(run "$app" staging "$B")"
+ahas "delegate → FIREBASE_ROLLBACK=1 in the deploy command's env" "$r" "ROLLBACK-FLAG=1"
+ahas "delegate → FIREBASE_ROLLBACK_SHA is the checked-out target" "$r" "SHA-MATCH=yes"
 aeq  "delegate fail → restored to main" "$(cd "$app" && git symbolic-ref --short HEAD)" "main"
 
 # ── platform guard ───────────────────────────────────────────────────────────
