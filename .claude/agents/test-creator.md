@@ -153,6 +153,10 @@ Never leave any category empty for any layer. Writing only happy-path tests for 
 - Use specific locators (getByRole, getByTestId, nth()) over generic text matching.
 - **Happy:** full user flow completes successfully. **Unhappy:** form submitted with missing/invalid fields, session expired mid-flow, network error, permission denied. **Edge:** very long content, back-navigation mid-flow, deep links into protected pages, concurrent sessions.
 
+### Tracer Test (MANDATORY when the entry has a `Tracer Path:` block — write it first)
+
+If the feature entry in `FEATURE_PROMPTS.md` has a `Tracer Path:` block (other than `none`), write its `Test:` before any other e2e, integration, or unit test. It drives the `Entry:` and asserts the `Output:` shape — that a result of the right kind arrives where the user would see it — not exact content, so it passes once every seam is stubbed and keeps passing once layers are real. Put `tracer` in the test name (e.g. `test_tracer_<feature_slug>` / `test('tracer: <feature>')`) so the calling skill can run it alone. Mock only external systems (third-party APIs, LLM calls) — never the project's own seams on the path; those must be crossed for real. If the entry has no `Tracer Path:` block or says `none`, skip silently.
+
 ### Wiring Tests (MANDATORY when seam list is provided)
 
 If the invoking skill (requirements-clarifier or feature pipeline) provides a **structured seam list** — lines in the format `[file:function] → [file:function] via [parameter/import/config]` — write at least one integration test per seam that exercises both sides of the wire in a single test.
@@ -195,7 +199,7 @@ Before listing test files created, verify your own output:
 1. **Check for acceptance scenarios.** At least one file in `tests/acceptance/scenarios/` (or the project's configured Scenario Source directory) must contain Given/When/Then blocks relevant to THIS feature/fix. Run: `grep -rl 'Given\|When\|Then' tests/acceptance/scenarios/*.md 2>/dev/null` (adjust path per project config).
 2. **If `.claude/no-acceptance` exists:** skip this check — the project opted out.
 3. **If no matching scenario file exists or has no Given/When/Then blocks:** STOP. Go back to Phase 4 and write them NOW. Do not report completion without acceptance scenarios.
-4. **Report in output:** include a line `Acceptance scenarios: <filename> (<N> scenarios)` in your output summary. This makes the presence (or absence) visible to the calling skill's checkpoint.
+4. **Report in output:** include a line `Acceptance scenarios: <filename> (<N> scenarios)` in your output summary. If the entry has a non-`none` `Tracer Path:`, also include `Tracer test: <file>::<test name> + <exact command to run it alone>`. This makes the presence (or absence) visible to the calling skill's checkpoint.
 
 **If you reach the Output section without having written or verified acceptance scenarios, you have a bug in your own execution. Go back.**
 

@@ -229,11 +229,21 @@ Explain what the change means in plain language — not file-level details, but 
 
 **Slice Gate (folded into the same card).** Don't ask for slicing as its own turn — the slice question rides on the closing card below, so the user answers plan-confirm and slice-mode in one reply ("go" = confirm plan, one pass; "go, sliced" = confirm plan, slice mode). Never auto-trigger slicing by size/complexity. If the user opts in, decompose the implementation sequence from this Plan into micro-slices (1 method/class/contract each), tag each `[HUMAN]` / `[AI]` / `[GATE]` per `~/.claude/references/slice-gate.md`'s taxonomy, and carry the tagged list into the `FEATURE_PROMPTS.md` write below (with a `Slice Mode: enabled` marker on the entry). If the feature entry already has a slice list from a prior run, reconcile rather than duplicate. If the user declines, write the entry with no marker — `/feature`/`/fix`/`/patch` then run their normal single-pass implementation.
 
+**Tracer path (always, no opt-in).** Derive the feature's tracer bullet from Phase 3: the thinnest real path from the entry point the user touches (command, route, button, schedule) to the output they see, crossing every seam on Phase 3's e2e happy path. If Phase 3 marked the e2e path blocked, the tracer runs through the named approximation (test hook, `/trigger` endpoint, fixture replay) instead. Record it as the first item of the task breakdown, ahead of all other tasks:
+
+    Tracer Path:
+    - Entry: <what the user does>
+    - Output: <what the user sees — shape, not exact content>
+    - Seams: <the Phase 3 seam lines this path crosses, in call order; each one stubbed for the tracer>
+    - Test: <the one e2e (or approximation) test that proves the path, asserting the output's shape so it passes with stubs and stays green once layers are real>
+
+Pure UX-only or docs-only features with no new call chain get `Tracer Path: none (no new seams)`. This rides in the `plan` ask of the closing card — no separate question.
+
 **GATE — the closing card.** Present it in the withhold format from §6 of `~/.claude/references/auto-phase-protocol.md` (**Read** it): lead with two lines of user-facing change, then the named asks `plan · slices · assumptions · audit`, then the one confirm-or-redirect question. `assumptions` covers every inferred answer the run shipped on (a trivially-skipped 1b, a UX-only 2b description, inferred layer reachability); `audit` covers the per-phase `PASS on attempt N` plus every sub-escalation-bar change Phases 3/4 logged. Don't dump all four unprompted.
 
 **After user confirms:** silently update docs before handing off to the feature pipeline:
 
-1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If Slice Gate was opted into, include the tagged slice list and the `Slice Mode: enabled` marker. If Phase 2b produced a before/after description (UX-only path), include it under a "Before/After" section. If the feature already has an entry, reconcile it rather than duplicating.
+1. **`docs/prompts/FEATURE_PROMPTS.md`** — add or update the feature entry with: feature title, PRD refs, dependencies, task breakdown (from Phase 5's implementation sequence, with the `Tracer Path:` block first), "Tests to Write First" per task (from Phase 4's layer-by-layer scenarios), and "Implementation Steps" per task. If Slice Gate was opted into, include the tagged slice list and the `Slice Mode: enabled` marker. If Phase 2b produced a before/after description (UX-only path), include it under a "Before/After" section. If the feature already has an entry, reconcile it rather than duplicating.
 2. **`docs/DECISIONS.md`** — append any architectural or approach decisions surfaced during the 5 phases (build/buy/hybrid choice, approach selected in Phase 2, any tradeoffs locked in Phase 3). Skip if no new decisions were made.
 3. Confirm in one line: "Updated FEATURE_PROMPTS.md (Feature N) and DECISIONS.md (N decisions)." Then invite the user to kick off `/feature`.
 
