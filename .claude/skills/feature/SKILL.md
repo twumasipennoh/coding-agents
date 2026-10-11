@@ -118,6 +118,12 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` against the current 
 
 **Proactive rule generation:** If during the trace you identify a seam type not covered by existing known-failures or script rules, emit a candidate to `~/.claude/state/wiring-rules/review-queue.jsonl`.
 
+**Tracer slice (BLOCKING when the entry has a non-`none` `Tracer Path:`):** before any real logic, connect the whole path first.
+1. Implement every seam on the `Tracer Path:` in call order with stub bodies (fixed return values, no real logic) — but real registration, injection, routing, and imports.
+2. Run the tracer test alone, using the command from test-creator's `Tracer test:` line. It must pass. If it fails, the path isn't connected — fix the wiring, not the test. Do not start step 3 until it passes; report the actual command and output.
+3. Only then fill in each layer behind the stubs (feature-creator below, or the Slice Gate loop). Re-run the tracer test after each layer; it must stay green. A red tracer after a layer means that layer broke a connection — fix before continuing.
+If the entry has no `Tracer Path:` block (older entries) or says `none`, skip this silently.
+
 **Slice Gate check:** if this task's `FEATURE_PROMPTS.md` entry has `Slice Mode: enabled`, run the implementation as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation before continuing, as silent sub-steps inside this step (no extra `pipeline-step.sh` calls per slice). Otherwise, proceed normally.
 
 Run the **feature-creator** agent -> implements code to make the failing tests pass, follows "Implementation Steps." (Under Slice Gate, feature-creator is invoked once per slice instead of once for the whole task.)
