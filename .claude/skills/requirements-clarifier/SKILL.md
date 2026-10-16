@@ -77,6 +77,8 @@ Walk through four sub-sections in order. Each is a discussion, not a checklist �
 
 **Complexity check (active, two-way).** Form an opinion: is this idea over-complicated for the value it delivers? Look for too many moving parts, surface area larger than necessary, scope that's drifted beyond the core need, or coupling that will produce bugs. If you think it's over-complicated, say so explicitly and propose specific simplifications — e.g., "cut X, defer Y to a follow-up, fold Z into existing surface area." The user accepts, pushes back ("Z genuinely needs to be in scope because…"), or counter-proposes. Iterate until you both agree on a version that has few moving parts, is appropriate for the idea, and is as easy to understand as possible. If the idea is already right-sized, say so plainly in one sentence and move on — don't manufacture friction.
 
+**Mockup mode (UI features only).** If the agreed scope has new or changed UI, the GATE summary names the inferred mockup mode — `variants (3)` for a new screen or substantial layout change, `single` for a tweak — so the user can flip it here. Phase 2b hands the locked mode to `/mockup`.
+
 **GATE: Pause after this phase and wait for user input before proceeding to Phase 1b.** Phase 1b's prior-art survey runs against the *agreed-on* (possibly simplified) version of the idea, not the original.
 
 ### Phase 1b — Prior Art Survey
@@ -117,10 +119,10 @@ After the user chooses an approach in Phase 2, apply the trigger and format rule
 
 **Visual path** (new/changed UI):
 1. Based on Phase 1 findings and the chosen Phase 2 approach, identify which screens or components need mockups
-2. Run `/mockup <feature-name>` for each screen that needs a visual design
+2. Run `/mockup <feature-name> — <change summary>` for each screen that needs a visual design. The change summary is that screen's line from the Phase 1 scope; `/mockup` step 0 infers `mode: variants (3)` or `mode: single` from it and states the pick. If the user locked the mode at the Phase 1 gate, pass it: `/mockup <feature-name> — <change summary> (mode: single)`
 3. The mockup skill will auto-commit, create a PR, and present the link
-4. The user reviews the mockups via the PR and approves or requests changes
-5. Iterate on the mockups if the user requests changes
+4. The user reviews via the PR; `/mockup` step 6 reads each reply as pick-plus-notes (one refined design), "more takes on X" (fresh variants of X), or approval, and keeps going on the same PR
+5. On approval `/mockup` finalizes: `docs/mockups/<feature-name>.html` (+ PNGs) is the only file left and is the spec for Phases 3-5
 
 **UX-only path** (behavior/flow change, no new or changed visual elements) — **AUTO, `clarifier-2b-ux`**:
 1. Write a before/after description — what happens now, what happens after — per the format rule in `mockup-trigger.md`

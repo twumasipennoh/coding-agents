@@ -125,7 +125,7 @@ If the report reveals this isn't a bug but a missing feature or design gap, that
 **Design tweak path:** Understand the visual/behavioral target:
 
 1. **What should this look like?** — Ask the user to describe the intended visual or behavioral result.
-2. **Mockup?** — Apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`. Non-trivial visual change (layout change, new component state, multi-element adjustment) → offer `/mockup` for a visual target, unchanged from before. Non-trivial UX-only change (flow/behavior change, no new or changed visual elements) → offer a before/after text description instead — what happens now, what happens after — kept inline, not persisted to a file. Trivial (copy change, single color swap, spacing adjustment) → skip, per the reference doc's trivial-skip.
+2. **Mockup?** — Apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`. Non-trivial visual change (layout change, new component state, multi-element adjustment) → offer `/mockup <feature> — <change summary>` for a visual target; `/mockup` step 0 infers `mode: single` for a tweak or `mode: variants (3)` for a substantial layout change, states it, and its step 6 refine loop runs on the mockup PR until approval. Non-trivial UX-only change (flow/behavior change, no new or changed visual elements) → offer a before/after text description instead — what happens now, what happens after — kept inline, not persisted to a file. Trivial (copy change, single color swap, spacing adjustment) → skip, per the reference doc's trivial-skip.
 
 **Visual mockups keep their stop** — the review happens on the `/mockup` PR, which is that skill's gate. A before/after text description does **not** get its own stop; it rides the Step 3c card.
 

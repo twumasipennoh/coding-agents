@@ -1,20 +1,20 @@
 # /mockup - Generate UI Mockup
 
-> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `mockup`, display name `Mockup`. Call `begin mockup "Mockup" --total 6` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end mockup --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
+> **Pipeline announcements required.** This is a multi-step pipeline. Announce steps via `~/.claude/scripts/pipeline-step.sh` per the rule in `~/.claude/CLAUDE.md § "Pipeline step announcements"`. Use pipeline-id `mockup`, display name `Mockup`. Call `begin mockup "Mockup" --total 8` at kickoff, `start`/`done`/`fail`/`skip` around each non-interactive step below, and `end mockup --status ok|fail` on completion. Skip interactive steps (user gates, clarification phases) — they self-announce. **Final output ordering (critical):** call `end` *before* emitting your final user-facing response. Your last message must be the deliverable itself (summary, report, PR link, etc.) with **no tool calls after it** — `--output-format json` returns only the final turn's text, so any deliverable emitted before a subsequent tool call is silently dropped.
 
 Run the **mockup-designer** agent to generate a standalone HTML mockup with Tailwind CSS v4, then capture screenshots at mobile and desktop widths.
 
 ## Usage
 
 ```
-/mockup <feature or screen name>
+/mockup <feature or screen name> [— <change summary>] [(mode: variants N | single)]
 ```
 
-If no name is given, ask the user which feature or screen to mockup.
+If no name is given, ask the user which feature or screen to mockup. The change summary (what the screen is for, what changes) feeds step 0's mode decision; callers that already locked a mode pass it in parentheses.
 
 ## Variants Mode
 
-If the user asks for multiple variants, options, versions, or alternatives ("3 takes on...", "compare A/B for...", "show me variants of..."), the agent produces N separate HTML files instead of one composite, and the skill sends THREE separate telegram albums (one per viewport) so each form factor compares at full resolution.
+Variants mode runs whenever step 0 decides `mode: variants (N)` — inferred from the change summary, locked by the caller or the user, or asked for outright ("3 takes on...", "compare A/B for...", "show me variants of..."). The agent produces N separate HTML files instead of one composite, and the skill sends THREE separate telegram albums (one per viewport) so each form factor compares at full resolution.
 
 ### Step overrides in variants mode
 
@@ -33,9 +33,25 @@ If the user asks for multiple variants, options, versions, or alternatives ("3 t
   Run the three sends as three separate Bash calls, never chained — see step 4's **Send rules**. If any album send still gets rejected, `telegram-send-media.sh` auto-falls-back to per-file sends so each file retries through `sendDocument` directly.
 - **Commit/PR step:** `git add docs/mockups/<feature>-variant-*.{html,png}` catches all N HTMLs and 3N PNGs. Branch: `mockup/<feature>-variants`. Commit: `docs: add <feature> UI mockup variants`.
 
-Single-mockup mode (one design, no variants) is unchanged — keep the existing single-file flow.
+Single mode runs when step 0 decides `mode: single` — the plain single-file flow below, unchanged.
 
 ## Steps
+
+### 0. Decide mode
+
+Every caller — requirements-clarifier Phase 2b, `/patch` Step 2, `fix-advocate`'s tail, or the user directly — hands over the feature name and, when it has one, a change summary. Decide the mode from it before any design work:
+
+- `mode: variants (3)` — a new screen, a new component, or a substantial layout change: anything where the user would want to compare directions before committing. Default count is 3, letters a/b/c.
+- `mode: single` — a tweak to an existing surface (one component state, a reflow, a copy change with layout impact): one "after" design is enough.
+- An explicit choice beats inference: a mode the caller passed in (`(mode: single)`), a Phase 1 scope summary the user already flipped, or the user's own words ("3 takes on…", "just one design").
+- Ambiguous — the summary could read either way, or there is none — ask one question ("variants or single?") and wait for the answer. Never default silently.
+
+State the pick as the first line of the run, with a one-clause reason:
+
+    mode: variants (3) — new screen
+    mode: single — one component state changes
+
+Variants mode changes the HTML, lint, screenshot, send and commit steps as listed under **Variants Mode** above. Single mode is the plain flow below.
 
 ### 1. Run mockup-designer agent
 
@@ -134,8 +150,28 @@ Mockup generated, committed, and PR created:
 Does this look right? Approve to proceed to implementation, or describe changes needed.
 ```
 
+### 6. Refine (loop until approved)
+
+The PR from step 5 is the review surface. Read each user reply as one of four things:
+
+- **Pick plus notes** ("B, tighten the header", "the second one but darker", "A's header on B's layout") → `refine <letter>`: one refined design written over that letter's files (`<feature>-variant-<letter>.html` and its PNGs; in single mode, `<feature>.html`). Re-run steps 1b-4 for that file only. A merge of two variants is a refine of the letter whose layout wins.
+- **More takes on a letter** ("more takes on B", "3 more variants of A", "riff on C") → `variants-of <letter>`: a fresh a/b/c derived from that letter, written over the previous round's a/b/c files — the previous round is replaced, not kept. Re-run steps 1b-4 in variants mode.
+- **Approval** — "approved", "approve", "go", "go ahead", "looks good", "ship it", "that's the one", or any reply that clearly says the current design is fine → finalize (below).
+- **Anything else** — a letter that doesn't exist ("D" when there are a/b/c), a reply that could be a pick or a new direction, a question → answer it or ask one question; change no files.
+
+Every refine or variants-of round commits to the **same mockup branch** and pushes; never open a second PR. Re-send the album(s) per step 4 so the new round is reviewable in place. Keep going until approval.
+
+**Finalize (on approval).** Run the helper — it renames the approved letter to the plain feature name, deletes every other variant file, commits only those paths and pushes on the current branch:
+
+    ~/.claude/scripts/mockup-finalize.sh <feature> <letter>
+
+In single mode (no `<feature>-variant-*` files) it is a no-op and exits 0. If no mockup exists yet for the feature, say so and finalize nothing. Afterwards `docs/mockups/<feature>.html` (+ `<feature>-{iphone12,iphone14pro,desktop}[-part-N].png`) is the spec — the path requirements-clarifier Phases 3-5, `/patch` Step 3c and FEATURE_PROMPTS entries cite. Close with one line:
+
+    approved <feature> (variant <letter>) · docs/mockups/<feature>.html · PR #<N>
+
 ## Notes
-- This skill is BLOCKING for visual UI changes — do not proceed to test-creator or feature-creator until the user approves the mockup.
+- This skill is BLOCKING for visual UI changes — do not proceed to test-creator or feature-creator until the user approves the mockup (step 6 finalize has run).
+- Only the approved design survives: after finalize, `docs/mockups/` holds `<feature>.html` + its PNGs and no `<feature>-variant-*` files.
 - Always auto-commit, auto-PR, and send the PR link. Never prompt about committing or PR creation.
 - Match Tailwind v4 conventions from the frontend codebase where possible.
 - If the screenshot tool fails, note the error and ask the user to open the HTML file in a browser.
