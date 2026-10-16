@@ -73,7 +73,7 @@ After Step 5 of the spine completes (Sibling sweep), proceed to the tail below.
 
 ## Tail — Mockup Check
 
-Before presenting the Hypothesis, apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`: does the fix change something the user would notice (a visible symptom, not just an internal cause)? If yes and the fix is a visual change, offer `/mockup` for a target-state image. If yes and it's UX-only (behavior/flow, no visual change), produce a before/after text description — what the user sees now (the bug), what they'll see after (the fix) — inline, not persisted to a file. If the fix has no user-visible effect (internal-only), skip.
+Before presenting the Hypothesis, apply the trigger and format rule in `~/.claude/references/mockup-trigger.md`: does the fix change something the user would notice (a visible symptom, not just an internal cause)? If yes and the fix is a visual change, offer `/mockup <feature> — <change summary>` for a target-state image (`/mockup` step 0 states the mode — `single` for most fixes — and its refine loop runs until approval). If yes and it's UX-only (behavior/flow, no visual change), produce a before/after text description — what the user sees now (the bug), what they'll see after (the fix) — inline, not persisted to a file. If the fix has no user-visible effect (internal-only), skip.
 
 ## Tail — Hypothesis (Step 6)
 

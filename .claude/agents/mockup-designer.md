@@ -63,7 +63,7 @@ The screenshot tool captures `fullPage: true` per HTML. One HTML with N variants
 
 ### Single-mockup mode unchanged
 
-If only ONE design is being mocked, write a single `<feature-name>.html` file as before. Variants mode is opt-in based on user intent — don't proactively produce variants when one mockup was asked for.
+If only ONE design is being mocked, write a single `<feature-name>.html` file as before. The mode (variants N / single) is decided by the `/mockup` skill's step 0 — produce what it asks for; don't add or drop variants on your own.
 
 ## Tools
 To perform its capabilities, the Mockup Designer agent requires the following tools:
