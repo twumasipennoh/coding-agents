@@ -62,8 +62,10 @@ Before anything else: `~/.claude/scripts/checkpoint.sh status <slug>` (slug deri
 
 Detect the current branch. If on the base branch (`main` or `master`):
 1. Derive a slug from the bug description (e.g., `login-redirect-loop` → `fix/login-redirect-loop`).
-2. Create the branch: `git checkout -b fix/<slug>`.
-3. Log: "Created branch fix/<slug>."
+2. Create the branch: `git checkout -b fix/<slug>` (or from `origin/<parent head>` when stacking, below).
+3. Log: "Created branch fix/<slug>." (plus "stacking on #N" when it does).
+
+**Stacked branches (`~/.claude/references/stacked-branch.md`):** before step 2, run that file's "Auto-branch" section. With one chain of open PRs of yours it says "stacking on #N (<title>), say 'standalone' to branch from main" and cuts from `origin/<parent head>` instead of the base branch, without waiting; it only stops to ask when two open chains exist. "standalone" → the base branch, as below.
 
 If already on a non-base branch, stay on it and log: "Using existing branch <name>."
 
@@ -80,35 +82,17 @@ Then reap what is already redundant: `~/.claude/scripts/reap-stashes.sh --quiet 
 
 ### 0b. Test Baseline Snapshot
 
-Capture the current test suite state BEFORE any implementation begins. This baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
+Capture the test suite state BEFORE any implementation begins, from saved receipts where they exist. The baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
 
-1. Read `.claude/test-commands.md` to get the test layer commands.
-   **Reuse saved results.** Compute the fingerprint once: `KEY=$(~/.claude/scripts/test-result-cache.sh key)`. It covers the code, `test-commands.md`, the lockfiles and tool versions. For each layer, run `~/.claude/scripts/test-result-cache.sh lookup "$KEY" "<layer>"`:
-   - Exit 0: an earlier run on this exact fingerprint saved the layer. Don't run it; its stdout is the layer's failing-test list. Use it as-is and add the layer to `reused_layers`.
-   - Exit 1 (nothing saved) or 3 (never reusable, e.g. real-API layers): run it in step 2.
-2. Run **ALL** test layers defined in `test-commands.md` (unit, integration, e2e, acceptance — every layer listed under `## Layers`) that weren't reused above. Do NOT skip any other layer. After each layer runs to completion, save it: `~/.claude/scripts/test-result-cache.sh save "$KEY" "<layer>" --failing-json '<failing test names as a JSON array>'` (exit 3 = never reusable, nothing saved). Write each failing test as `<file path from the repo root> > <full test title, describe blocks included>` (e.g. `tests/auth.test.ts > sign-in > rejects a bad token`), both here and in `failing_by_layer`, so names from a saved run match names from a fresh one. Don't save a layer that crashed or failed on setup (port in use, emulator down): only a completed run is a result. Collect the names of any failing tests per layer. **Run each layer as a blocking `Bash` call, in the same turn** — wrap it in `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/test-baseline-<layer>.log -- <layer-cmd>`. The blocking Bash call is what holds the turn; do NOT stream it via the `Monitor` tool to "wait" for it — `Monitor` returns immediately and would detach the turn. NEVER launch the baseline as a detached background job and end the turn with a "waiting for results" message: under openclaw `/claude` (= `claude -p`, no agent loop after the final turn) nothing re-invokes you when it finishes, so the pipeline stalls forever. See `~/.claude/CLAUDE.md` § "Long-running commands". **Don't assume a real-API-gated test failure inside `npm test` is shell-state leakage** — some projects deliberately pin live-API opt-in vars (e.g. `RUN_REAL_CLAUDE`) to `"1"` by default in a global test-setup file specifically so tests aren't silently skipped on dev machines (a "no-skipped-tests policy"); `env -u`-stripping the var in that case is a no-op and hides the real signal. Check the project's test-setup file for a default-pinning pattern before concluding "leaked env var."
-3. Write the baseline to `.claude/state/test-baseline-<branch-name>.json`:
-   ```json
-   {
-     "failing_by_layer": {
-       "core unit": ["test.name.one"],
-       "e2e": ["test.name.two"]
-     },
-     "layers_run": ["core unit", "web unit", "e2e"],
-     "timestamp": "<ISO>",
-     "branch": "<branch>"
-   }
-   ```
-   - `failing_by_layer`: map of layer name → array of failing test names. Omit layers with zero failures.
-   - `layers_run`: every layer that was executed (including those with zero failures). This is the completeness proof.
-   - `reused_layers`: layers taken from saved results instead of run. They still count in `layers_run`. Also record `"key": "$KEY"`.
-4. If all tests pass across all layers, write `{ "failing_by_layer": {}, "layers_run": ["...all layers..."], "timestamp": "...", "branch": "..." }`.
-5. **Validation**: compare `layers_run` against the layers defined in `test-commands.md`. If any defined layer is missing from `layers_run`, the baseline is incomplete — re-run the missing layer(s) before proceeding.
-6. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED).
+1. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED); the main-must-be-green block below then does not apply.
+2. `KEY=$(~/.claude/scripts/test-result-cache.sh key)` — the fingerprint of the tracked code, `test-commands.md`, the lockfiles and tool versions. Receipts live in one drawer per repo (`<main checkout>/.claude/state/test-results/`, shared by every worktree, never committed).
+3. `~/.claude/scripts/test-result-cache.sh plan "$KEY"` prints one `layer<TAB>command[<TAB>never-reusable]` line per layer with no receipt under this key. On a branch just cut from a green tip it prints nothing, or only never-reusable layers (real-API / real-claude / `## No Reuse`): every other layer is reused and no test runs. Any other line means the fingerprint changed since the last saved run (code, lockfile or tool version) — run only those layers.
+4. For each printed line, run the command verbatim (it already carries its tmp/slot wrappers) as a **blocking Bash call in the same turn**, wrapped in `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/test-baseline-<layer>.log -- <command>`. After a completed run, `~/.claude/scripts/test-result-cache.sh record "$KEY" "<layer>" --failing-json '<failing test names as a JSON array>'`, each name as `<file path from the repo root> > <full test title, describe blocks included>` (e.g. `tests/auth.test.ts > sign-in > rejects a bad token`) so names from a saved run match names from a fresh one. Don't record a layer that crashed or failed on setup (port in use, emulator down): only a completed run is a result. `record` exits 4 while tracked files are modified — commit or stash first. **Do NOT stream a layer via the `Monitor` tool to "wait" for it** — `Monitor` returns immediately, so to wait on it you'd end the turn, which is exactly the detach that stalls under a print-mode CLI. NEVER launch the baseline as a detached background job and end the turn with a "waiting for results" message. See `~/.claude/CLAUDE.md` § "Long-running commands".
+5. `~/.claude/scripts/test-result-cache.sh baseline "$KEY" "$(git branch --show-current)" --ran "<comma-separated layers you ran in step 4>"` writes `.claude/state/test-baseline-<branch>.json` (`failing_by_layer`, `layers_run`, `reused_layers`, `key`, `branch`, `timestamp`). Exit 5 names a layer with no receipt — run and record it, then retry. That exit is the completeness proof: every layer under `## Layers` ends up in `layers_run`.
 
-**BLOCKING — main-must-be-green rule.** If any layer in `failing_by_layer` is non-empty, STOP the pipeline immediately. Report failing tests grouped by layer and refuse to proceed. The baseline is captured on a freshly-cut branch off main, so failing tests here mean main itself is red — starting new work on a red base hides regressions inside the "PRE-EXISTING permit" that pipeline-tail's Auto-Fix Constraints grant ([pipeline-tail.md § Auto-Fix Constraints](/home/kwaku/.claude/skills/pipeline-tail/SKILL.md#L71)). Fix main first (revert the offending commit, or fix forward on a dedicated repair branch), then re-run `/fix`.
+**BLOCKING — main-must-be-green rule.** If any layer in `failing_by_layer` is non-empty, STOP the pipeline immediately. Report failing tests grouped by layer and refuse to proceed. The baseline is captured on a freshly-cut branch, so failing tests here mean the base itself is red — starting new work on a red base hides regressions inside the "PRE-EXISTING permit" that pipeline-tail's Auto-Fix Constraints grant ([pipeline-tail.md § Auto-Fix Constraints](/home/kwaku/.claude/skills/pipeline-tail/SKILL.md#L71)). Fix the base first (revert the offending commit, or fix forward on a dedicated repair branch), then re-run `/fix`.
 
-Exception: if `.claude/test-commands.md` is missing (Step 6 above), the baseline step was skipped and this block does not apply — new/bootstrapping projects still proceed normally.
+Exception: if `.claude/test-commands.md` is missing (step 1 above), the baseline step was skipped and this block does not apply — new/bootstrapping projects still proceed normally.
 
 ### Auto-phase protocol (governs which steps stop)
 
