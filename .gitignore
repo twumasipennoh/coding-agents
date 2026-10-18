@@ -1,0 +1,4 @@
+
+# test receipts (shared drawer, never committed)
+.claude/state/test-results/
+.claude/state/test-baseline-*.json
