@@ -124,7 +124,7 @@ resume identity is keyed on.
 4. `read AHEAD BEHIND < <(git rev-list --left-right --count "$BASE...origin/$BASE")`, then:
    - **0 / 0** → in sync, continue.
    - **behind only (AHEAD=0)** → if the current branch is `$BASE` and `git status --porcelain` is empty, run `git pull --ff-only origin "$BASE"`, note "fast-forwarded <old>→<new>", and continue. If the tree is dirty, or `$BASE` isn't checked out here, stop and say local `$BASE` is `<N>` behind `origin/$BASE` and needs a pull.
-   - **ahead (AHEAD>0, BEHIND=0)** → stop: "local `$BASE` has `<N>` unpushed commits — push or reset before deploying." Never push on the user's behalf here.
+   - **ahead (AHEAD>0, BEHIND=0)** → stop: "local `$BASE` has `<N>` unpushed commits — push or reset before deploying." Never push on the user's behalf here. (The deploy's own record commit at Step 5 is pushed as it is made, so a finished deploy never leaves `$BASE` ahead; one that does is a rejected push the summary already named.)
    - **diverged (both >0)** → stop: "local `$BASE` and `origin/$BASE` have diverged (`<A>` ahead, `<B>` behind) — reconcile before deploying." Never rebase or reset automatically.
 5. If the current branch isn't `$BASE` (e.g. deploying from a task worktree), the check above still runs against the `$BASE` ref, and additionally require that HEAD is pushed: `git rev-list --count "@{u}..HEAD"` must be 0 (no upstream = stop, "branch not pushed").
 
@@ -286,7 +286,28 @@ If the file doesn't have a table header yet, prepend:
 
 Insem only: `scripts/deploy.sh` also appends its own machine-level record to `~/.claude/state/insem-deploys.jsonl` (F92 / DEC-339), whoever writes the `DEPLOYMENTS.md` row. Don't add a second record from this step.
 
-On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, <branch>"`.
+**Record commit (both kinds, after the row and the tag below).** The row above and the
+scenario-registry stamps the acceptance gate wrote (Step 3) are tracked files, and a
+live checkout left with them modified blocks the next automated ship: Chini
+fast-forwards a live checkout only when it has no uncommitted tracked changes, so its
+"Ship it" refused and restarted nothing after a hand deploy (2026-10-18). A local commit
+would block the same way (main ahead of origin). So the deploy owns its records:
+
+```bash
+~/.claude/scripts/deploy-log-commit.sh --env <env-label> --sha <commit-short-hash> "$(pwd)"
+```
+
+It stages only `DEPLOYMENTS.md` and `.claude/scenario-registry.yaml`, commits
+`chore: deploy <sha> to <env>`, and fast-forward-pushes the base branch — the shape of
+the hand-made `chore: deploy log rows` commits already on main. Other dirty files are
+left as they were. Read its exit code: `0` recorded (or nothing to record); `2` the push
+was rejected because the base moved — the commit is undone and the files are left
+modified, say so in the summary and let the next deploy record them; `3` the checkout is
+on a detached HEAD or another branch (the Insem promoter's pinned worktree, a task
+worktree) — nothing committed, say so. Never leave a local commit behind on either path.
+On a `kind: "local-script"` deploy, cut the rollback tag first (below), then run this.
+
+On completion: `pipeline-step.sh done deploy "Log" --note "<commit-short-hash>, <branch>, records <pushed|left: reason>"`.
 
 **Rollback tag (`kind: "local-script"` only — Feature 86 / DEC-210).** For a
 `local-script` deploy that succeeded (`<status>` = `success`), also cut a git
