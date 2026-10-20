@@ -106,6 +106,8 @@ Examples below are JS/TS-flavored. Substitute idiomatic equivalents for other la
 - [ ] Specific selectors (role, testid, label) over text-only.
 - [ ] No flaky time/random dependencies; use fixed seeds/clocks.
 - [ ] Mock signatures reflect callsite usage, not blind `(...args) => fn(...args)`.
+- [ ] Playwright configs read the worker count from `PW_WORKERS` (e.g. `workers: Number(process.env.PW_WORKERS) || 2`) — a hardcoded `workers:` above 1 bypasses the machine-wide cap. `workers: 1` is fine.
+- [ ] Every heavy layer in `.claude/test-commands.md` (e2e, acceptance, emulator / rules / firestore layers) and the package scripts behind them run through `~/.claude/scripts/with-test-slot.sh --label "<project> <layer>" --`. A heavy command without it skips the machine-wide test queue. Unit layers don't need it.
 
 ### Integration & wiring
 - [ ] No orphan files: every new file has at least one external import.

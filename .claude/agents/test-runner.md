@@ -58,10 +58,14 @@ Read `<cwd>/.claude/test-commands.md`.
 The ordered list of test layers. Run them in sequence. One bullet per layer:
 - `<layer name>`: `<shell command>`
 
+Every layer except typecheck/lint/format/build (and ci-only layers) must run
+through `~/.claude/scripts/with-test-tmp.sh`, in the command itself or in the
+package.json script it calls. `check-test-tmp-wiring.sh` enforces this.
+
 Example:
-- `core unit`: `npm -w packages/core run test -- --run`
-- `web unit`: `npm -w apps/web run test:run`
-- `e2e`: `cd apps/web && npx playwright test --reporter=list`
+- `core unit`: `~/.claude/scripts/with-test-tmp.sh --label "core unit" -- npm -w packages/core run test -- --run`
+- `web unit`: `~/.claude/scripts/with-test-tmp.sh --label "web unit" -- npm -w apps/web run test:run`
+- `e2e`: `cd apps/web && ~/.claude/scripts/with-test-tmp.sh --label "e2e" -- npx playwright test --reporter=list`
 
 ## E2E Coverage Gate (optional)
 If a layer is e2e and a gate should fire when UI files are touched but no e2e ran:
@@ -113,6 +117,16 @@ If no baseline file exists, classify all failures as `UNCLASSIFIED` and note: "N
 ## Workflow
 
 1. Read `test-commands.md`. If missing, BLOCK.
+   Then run `~/.claude/scripts/check-test-tmp-wiring.sh <cwd>`. Exit 1 → BLOCK before running anything:
+   ```
+   Test Run: BLOCKED — tests would leak temp folders into /tmp.
+   Unwired: <the listed layers>
+   Fix: prefix each layer's command (or its package.json script) with
+        ~/.claude/scripts/with-test-tmp.sh --label "<project> <layer>" --
+        and add the direct-run hook to each listed config: vitest/Playwright
+        configs call ~/.claude/scripts/vitest-test-tmp.mjs, top-level
+        conftest.py files call ~/.claude/scripts/pytest_test_tmp.py.
+   ```
 2. If `## Pre-Test Setup` is defined, run each setup. On port conflict, follow `conflict_action`.
 3. Run each `## Layers` layer in order. Capture pass/fail/skip counts and failures. If a baseline file exists, classify failures per "Baseline Comparison" above.
 4. Evaluate `## E2E Coverage Gate` if defined:
@@ -184,3 +198,5 @@ For all failures, include:
 - Always run cleanup (post-test) — even when a layer fails.
 - Never skip e2e tests because "the emulator isn't running". Start it per `## Pre-Test Setup`.
 - **Hold the turn — never detach a layer run.** Run each `## Layers` command as a **blocking `Bash` call**, in the same turn, wrapped in `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/test-run-<layer>.log -- <layer-cmd>`. The blocking Bash call is what holds the turn. **Do NOT stream a layer via the `Monitor` tool to "wait" for it** — `Monitor` returns immediately, so to wait on it you'd end the turn, which is exactly the detach that stalls under `claude -p`. NEVER launch a suite as a detached background job and end the turn with a "waiting for results" message — under openclaw `/claude` (= `claude -p`) there is no agent loop after the final turn, so nothing re-invokes you when it finishes and the run stalls forever. `longrun-tick`'s 60s `[TICK]` keeps output flowing so the turn safely holds for an hour+. See `~/.claude/CLAUDE.md` § "Long-running commands".
+- **Per-run temp folder.** Every layer except typecheck/lint/format/build runs through `~/.claude/scripts/with-test-tmp.sh`, which gives the run its own TMPDIR and deletes it afterwards (2026-10-12: ~9M leaked test files in /tmp saturated the disk). When a layer's log has a `[TMP-LEAK n=<N>] <names>` line, report it as a warning under that layer: something wrote to a hardcoded `/tmp` path. Don't fail the run for it.
+- **Test slot queue.** Heavy layers (e2e, acceptance, emulator) run through `~/.claude/scripts/with-test-slot.sh`, so only one heavy suite runs on the machine at a time and the rest wait in line. Before each heavy layer, run `~/.claude/scripts/with-test-slot.sh --status` (from the project root). If it exits 1 (`busy: <label> running …`), announce the wait as its own step **as a plain standalone command** (no loop, variable or `&&` around it): `~/.claude/scripts/pipeline-step.sh start <pipeline-id> "Waiting for test slot"` — only when a pipeline is active. Then run the layer as usual. When it returns, read the `[SLOT acquired waited=<s>s]` line from its log and close the step: `~/.claude/scripts/pipeline-step.sh done <pipeline-id> "Waiting for test slot" --note "waited <duration> behind <label>"`. If the log has a `[HANG …] (no direct alert sent)` line, announce it the same way as a start/done pair named `Test run looks hung` with the marker text as the note — that's the only alert that run's owner gets. A `[HANG …]` line without that suffix already alerted; don't repeat it. Never work around the queue (no running the bare command to skip the line).

@@ -113,6 +113,12 @@ on the checkpoint when the verdict lands:
 - **test-runner** — full test suite across all layers. BLOCKING. Emulators are already running; test-runner's Pre-Test Setup should verify (check) but not re-start.
   - **Save results for reuse.** Right before test-runner's final attempt, compute `KEY=$(~/.claude/scripts/test-result-cache.sh key)`. When it passes, recompute the key. If it's unchanged, save every layer that ran to completion: `~/.claude/scripts/test-result-cache.sh save "$KEY" "<layer>" --failing-json '<its PRE-EXISTING failures as a JSON array, [] when green>'` (exit 3 = never reusable, skip it). Write each failing test as `<file path from the repo root> > <full test title, describe blocks included>`, the same format the baseline uses. If the key changed mid-run (an auto-fix landed), save nothing. After a rebased squash merge, main gets this same key, so the next baseline reuses these results.
 - **acceptance-tester** — invoke as a full-tool agent (`subagent_type: claude`). BLOCKING if scenarios can't reach `Then` clause. Reports DEFERRED only if sidecar was auto-scaffolded (missing `.claude/acceptance-config.md`). Reports SKIPPED if `.claude/no-acceptance` present. Emulators are already running; Pre-Run Setup checks should find state = `ours` and reuse.
+- **Graduation** — a Bash step, not an LLM agent (DEC-352/353/353). Runs right after acceptance-tester has stamped the registry and **while acceptance infra is still up** (the generator's browser drives the same Vite dev server on :5173; teardown below must not run first). Announce `pipeline-step.sh start <pipeline-id> "Graduation"`, then run as a blocking Bash call in this turn (max tool timeout; never detached):
+  `node ~/.claude/scripts/scenario-graduation/graduate-scenarios.js --repo "$(pwd)" --pipeline-id <pipeline-id> --generator agent`
+  The script selects the batch of qualified rows, spawns `playwright-test-generator` per scenario (its MCP server runs against `acceptance-config.md § Graduation` `generator_config` — `playwright.graduation.config.ts`, which the repo's human-facing `.mcp.json` mirrors — so Playwright's `webServer`/`globalSetup` never start), proves each spec is collected, reconciles shadow agreement, and retires specs that agreed `shadow_agree_threshold` times. Its final stdout line is the done-note, printed as `done-note: <text>`; the line before it is `gates: <fragment>`. Strip the `done-note: ` prefix — `<text>` is what goes to `--note` and what the `skipped:` check below reads — and put `<fragment>` (e.g. `graduation ✓ (12 shadowed, 3 retired, 1 disagreed)`) in the GATES line as-is. Pass `<text>` through verbatim, do not rewrite it:
+  - exit 0 → `pipeline-step.sh done <pipeline-id> "Graduation" --note "<text>"` (e.g. `12 shadowed: <ids>; 3 retired: <ids>; 1 disagreed: <id> — …`). When `<text>` starts with `skipped:` (e.g. `skipped: graduation not enabled` — the project's `acceptance-config.md § Graduation` has no `shadow_dir`), use `pipeline-step.sh skip <pipeline-id> "Graduation" "<text>"` instead.
+  - exit 3 → `pipeline-step.sh skip <pipeline-id> "Graduation" "generator unavailable"` — the subagent did not expose the `mcp__playwright-test__*` tools, so nothing was written (DEC-355).
+  - any other non-zero → `pipeline-step.sh fail <pipeline-id> "Graduation" "<last stderr line>"`, then **continue to teardown**. This step is **non-blocking**: a shadow disagreement, a generator error, or a collection miss never fails the feature — the ephemeral scenarios still guard coverage, and the script only touches registry rows on the paths it completed. Record it in the GATES line as `graduation ✗ (<reason>)`. Do not retry; the next pipeline re-queues whatever was left unshadowed.
 
 After Phase B completes (success or failure):
 - **Test Environment Teardown** — run `~/.claude/scripts/acceptance-infra.sh stop $(pwd)` via Bash. Always runs (success or failure). Announce via `pipeline-step.sh start/done`. Do NOT skip on failure — cleanup must happen.
@@ -291,7 +297,7 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-5. Create PR: `gh pr create --title "<title>" --body "<body>" --base <base-branch>`
+5. Create PR: `gh pr create --title "<title>" --body "<body>" --base <base-branch>`. `<base-branch>` is the parent PR's head when this branch was cut on a stack, else the base branch: resolve it from git per `~/.claude/references/stacked-branch.md` § "PR base" (the newest open PR of yours whose head is an ancestor of HEAD), then link the new PR into that stack with `gh stack link <parent number> <new number>` when `gh stack --version` works; say so in one line if it doesn't.
 6. Capture the PR URL.
 
 ### 6. Final output
@@ -306,6 +312,7 @@ Emit the GATES completion log + PR link as the final message (caller-ships mode:
 GATES: pattern-enforcer ✓ | security-reviewer ✓ | test-gap-auditor ✓ |
        monitoring-spec-validator ✓/DEFERRED | frontend-design-reviewer ✓/SKIPPED |
        test-runner ✓ | acceptance-tester ✓/DEFERRED/SKIPPED |
+       graduation ✓ (N shadowed, M retired, K disagreed)/skipped/✗ (<reason>) |
        acceptance-regen ✓/current/N-A | doc-updater ✓ |
        memory-review ✓ (<N> actions)
 
