@@ -139,6 +139,13 @@ A markdown file with H2 sections. Required sections marked **(required)**.
 - `shadow_agree_threshold`: how many pipelines the shadow spec (both `shadow` and `shadow-iphone` projects) and the ephemeral scenario must pass together before the spec retires into `playwright_target_dir` and the row becomes `status: graduated` (default = `pass_streak_threshold`). Any disagreement resets the count and never blocks the feature.
 - `generator_config`: the Playwright config the generator's MCP server runs under (e.g., `playwright.graduation.config.ts` — no `webServer`, no `globalSetup`, `baseURL` pointed at the acceptance infra's dev server; DEC-355).
 
+Layout keys (optional). Each default is the Insem layout, so a project shaped like Insem sets none of them. Every path is repo-relative and must resolve inside the repo, or the Graduation step exits 1 before writing anything.
+- `playwright_cwd`: the directory where `npx playwright test --list` runs, which is also where the Playwright config lives (default `.`). For example, HabitTracker sets `apps/web`. `--list` prints paths relative to that config's `testDir`. The collection check matches them as a suffix of the repo-relative spec path.
+- `shadow_helper`: a comma list of the modules a shadow spec imports `test` / `expect` from. Paths are repo-relative, with no extension (default `tests/helpers/shadow-test, tests/graduated/helpers/shadow-test`).
+- `helper_allowlist`: a comma list of the other project test helpers a shadow spec may import, or `none` (default `tests/helpers/youtube-player-stub, tests/helpers/tap-chrome, tests/helpers/console-errors`). List only browser-side helpers. A helper that wipes the emulator or makes Node-side HTTP calls must stay off this list.
+- `spec_path_root`: the directory that every file-path literal in a shadow spec must stay under. That covers `setInputFiles`, `screenshot({ path })`, `addInitScript({ path })` and similar (default `tests`). A literal is resolved from `playwright_cwd`, because that is where Playwright resolves it at run time.
+- `helper_import`: the exact import line the generator is told to put first and the stub generator writes (default `import { test, expect } from "../helpers/shadow-test";`). Its module is resolved from `shadow_dir` and must land on one of `shadow_helper`. Otherwise every generated spec would be rejected, so the step refuses to start.
+
 ## Pre-Run Setup (optional)
 For each dependency the running app needs (db, queues, the app itself), define:
 - `name`: short label
