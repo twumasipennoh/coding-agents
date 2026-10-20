@@ -121,6 +121,8 @@ This is the existing behavior when only one repo has changes.
 gh pr create --title "<title>" --body "<body>" --base <base-branch>
 ```
 
+`<base-branch>` is the parent PR's head when this branch was cut on a stack, else the base branch: resolve it from git per `~/.claude/references/stacked-branch.md` § "PR base" (the newest open PR of yours whose head is an ancestor of HEAD), then link the new PR into that stack with `gh stack link <parent number> <new number>` when `gh stack --version` works; say so in one line if it doesn't.
+
 ### 5b. Refresh matching task checkpoint (F1, best-effort)
 
 If any `.claude/state/task-*.md` file has a `branch:` field matching the current branch, run `checkpoint.sh note <slug> "PR #<N> opened: <url>"` then `checkpoint.sh progress <slug>` — this bumps the progress counter the stall-escalation watchdog reads, so a PR that's legitimately waiting on human review doesn't get falsely flagged as "stalled" between now and merge. Do NOT call `checkpoint.sh complete` here — a PR can still get review changes; completion is `/merged`'s job, after the merge is confirmed. If no matching checkpoint exists, skip silently — most branches aren't F1-enrolled.
@@ -194,7 +196,7 @@ For each validated repo, sequentially:
 8. Stage only the relevant changed files (e.g., `.claude/CLAUDE.md`): `git add <specific files>`
 9. Commit with a message tailored to the project and change
 10. Push: `git push -u origin <branch-name>`
-11. Create PR: `gh pr create --title "<title>" --body "<body>" --base <base>`
+11. Create PR: `gh pr create --title "<title>" --body "<body>" --base <base>` (`<base>` per `~/.claude/references/stacked-branch.md` § "PR base" when the branch sits on an open PR; then `gh stack link <parent> <new>` if `gh stack` is installed)
 12. Record the PR URL
 12b. Best-effort F1 refresh: if `.claude/state/task-*.md` in this repo has a `branch:` field matching `<branch-name>`, run `checkpoint.sh note <slug> "PR #<N> opened: <url>"` then `checkpoint.sh progress <slug>` (same rationale as single-project Step 5b). Skip silently if none.
 13. Switch back to original branch: `git checkout <original-branch>`
