@@ -297,7 +297,7 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
 
-5. Create PR: `gh pr create --title "<title>" --body "<body>" --base <base-branch>`. `<base-branch>` is the parent PR's head when this branch was cut on a stack, else the base branch: resolve it from git per `~/.claude/references/stacked-branch.md` § "PR base" (the newest open PR of yours whose head is an ancestor of HEAD), then link the new PR into that stack with `gh stack link <parent number> <new number>` when `gh stack --version` works; say so in one line if it doesn't.
+5. Create PR: `gh pr create --title "<title>" --body "<body>" --base <base-branch>`. `<base-branch>` is always the base branch, even when this branch was cut on an open PR: per `~/.claude/references/stacked-branch.md` § "PR base", add the `Builds on #N` line to the body instead of pointing the PR at the parent's branch.
 6. Capture the PR URL.
 
 ### 6. Final output
