@@ -105,14 +105,24 @@ The calling skill may provide a baseline file at `.claude/state/test-baseline-<b
    To build the flat set of all pre-existing failures, collect all test names across all values in `failing_by_layer`. Legacy baselines with a flat `"failing": [...]` array are also accepted — use the array directly.
 
    Baseline test names use the format `<file path from the repo root> > <full test title, describe blocks included>` (e.g. `tests/auth.test.ts > sign-in > rejects a bad token`), and may come from a saved earlier run rather than this branch's baseline run. Write every failure you observe in that same format before matching, and in your report. Don't match on the title alone.
-2. **Classify each failure** in the current run:
-   - Test name appears in the baseline's failing set → **PRE-EXISTING** (was already broken before our changes)
-   - Test name does NOT appear in the baseline's failing set AND the test file was created by test-creator in this pipeline run → **NEW-FAILING** (test-creator's test that implementation should satisfy)
-   - Test name does NOT appear in the baseline's failing set AND the test file existed before this pipeline run → **REGRESSION** (our changes likely broke this)
-3. **Layer coverage check**: if `layers_run` exists in the baseline, compare it against the layers defined in `test-commands.md`. If the baseline is missing a layer, note it: "Baseline did not cover layer `<name>` — failures in that layer classified as UNCLASSIFIED." Classify failures in uncovered layers as UNCLASSIFIED (safe default).
-4. **Report classifications** in the output (see Output Format below).
+2. **Classify each failure with the script, never by judgment.** See "New failures need a lead" below. The classes:
+   - **KNOWN**: in a baseline's failing set (the branch baseline, or a committed accepted-failure list a layer names, e.g. KaeMe's `scripts/real-claude-baseline.json`).
+   - **REGRESSION**: not known, its layer was in the baseline run, and its file existed before this run, so it passed before and fails now.
+   - **UNCLASSIFIED**: not known, and new (a test file created in this run) or its layer isn't covered by a baseline, or there's no baseline.
+   - **Passed on retry**: passed only after failing (vitest `retry`, a reporter's retry log, or a gate re-run). Not a failure, but listed.
+3. **Report** per Output Format below.
 
-If no baseline file exists, classify all failures as `UNCLASSIFIED` and note: "No baseline available — cannot distinguish pre-existing from regression."
+## New failures need a lead (the one rule; skills and worker prompts point here)
+
+A runner reports failures; a lead decides what they mean. Write the run as JSON (`{"tests":[{"layer","test","state":"fail"|"pass","error","guess","new_file","retries"}]}`, every failing test plus every retry-pass, ids in baseline format) and run:
+
+    node ~/.claude/scripts/classify-failures.mjs --results <run.json> --baseline .claude/state/test-baseline-<branch>.json [--baseline <accepted-list.json>:<layer>]
+
+- Its output goes **verbatim at the top** of the PR description and of your final report: `## ⚠️ New test failures: needs a lead` (REGRESSION + UNCLASSIFIED: test, layer, first error line, `Guess (unverified): …`), then `## Passed on retry`, then `## Known failures`.
+- Its last line is the gate. Exit 10 = `test-runner ⚠️ needs lead review (N new)`: report it as that, never as ✓.
+- Never call a failure "unrelated", "flaky" or "pre-existing", and never move one out of the heading by reasoning about it. Your guess goes in the `guess` field and nowhere else.
+- `retries` comes from the layer's retry log where one exists (e.g. a `flake-reporter` tracker under `.claude/state/`), or from vitest/Playwright output.
+- A layer with a wrapper script in `test-commands.md` (e.g. KaeMe's `scripts/verify-real-claude.sh`) runs through the wrapper, never the raw command; unattended runs add its quiet flag (`--foreground --quiet`) instead of skipping it.
 
 ## Workflow
 
@@ -150,15 +160,7 @@ Test Results:
   Total:     XX passed, XX failed
   Duration:  Xs
 
-Failure Classification (baseline: <present|absent>):
-  REGRESSION (XX):
-    - <test name> — <file:line> — <assertion message>
-  NEW-FAILING (XX):
-    - <test name> — <file:line> — <assertion message>
-  PRE-EXISTING (XX):
-    - <test name> — <file:line> — <assertion message>
-
-Gate-blocking failures: XX REGRESSION + XX NEW-FAILING (PRE-EXISTING excluded)
+<classify-failures.mjs output, verbatim: ⚠️ heading, Passed on retry, Known failures, GATE line>
 
 E2E Gate: ✅ PASS / ❌ BLOCKED — <reason> / ⏭️ SKIPPED (no e2e layer defined)
 ```
@@ -180,15 +182,8 @@ Rules:
 - If everything passed with zero skips, omit the skip clause entirely rather than writing ", 0 skipped".
 
 **Classification rules for the auto-fix loop:**
-- **REGRESSION** and **NEW-FAILING** failures count as gate-blocking. The pipeline must fix these before proceeding.
-- **UNCLASSIFIED** failures (no baseline available) are gate-blocking (safe default).
-- **PRE-EXISTING** failures are gate-blocking under the main-must-be-green rule enforced by `/feature`, `/fix`, and `/patch` at Step 0d/0b. Their appearance indicates baseline enforcement was bypassed or the baseline file is stale/corrupt — flag for investigation and treat as regression (see `~/.claude/skills/pipeline-tail/SKILL.md` § Auto-Fix Constraints).
-
-For all failures, include:
-- Test name
-- File path and line number
-- One-line error / assertion message
-- Classification tag: `[REGRESSION]`, `[NEW-FAILING]`, `[PRE-EXISTING]`, or `[UNCLASSIFIED]`
+- **REGRESSION** and **UNCLASSIFIED** hold the gate. The pipeline may try to fix them (a new test from test-creator is the implementation's contract); whatever is still red after the loop is reported under the ⚠️ heading as "needs lead review", per "New failures need a lead".
+- **KNOWN** doesn't hold the gate. A KNOWN failure from the *branch* baseline shouldn't exist under the main-must-be-green rule (`/feature` Step 0d, `/fix` and `/patch` Step 0b), so name it in the report as a stale baseline.
 
 ## Rules
 - Do NOT fix code. Only report results.
@@ -200,3 +195,5 @@ For all failures, include:
 - **Hold the turn — never detach a layer run.** Run each `## Layers` command as a **blocking `Bash` call**, in the same turn, wrapped in `~/.claude/scripts/longrun-tick.sh -i 60 --no-ping -l /tmp/test-run-<layer>.log -- <layer-cmd>`. The blocking Bash call is what holds the turn. **Do NOT stream a layer via the `Monitor` tool to "wait" for it** — `Monitor` returns immediately, so to wait on it you'd end the turn, which is exactly the detach that stalls under `claude -p`. NEVER launch a suite as a detached background job and end the turn with a "waiting for results" message — under openclaw `/claude` (= `claude -p`) there is no agent loop after the final turn, so nothing re-invokes you when it finishes and the run stalls forever. `longrun-tick`'s 60s `[TICK]` keeps output flowing so the turn safely holds for an hour+. See `~/.claude/CLAUDE.md` § "Long-running commands".
 - **Per-run temp folder.** Every layer except typecheck/lint/format/build runs through `~/.claude/scripts/with-test-tmp.sh`, which gives the run its own TMPDIR and deletes it afterwards (2026-10-12: ~9M leaked test files in /tmp saturated the disk). When a layer's log has a `[TMP-LEAK n=<N>] <names>` line, report it as a warning under that layer: something wrote to a hardcoded `/tmp` path. Don't fail the run for it.
 - **Test slot queue.** Heavy layers (e2e, acceptance, emulator) run through `~/.claude/scripts/with-test-slot.sh`, so only one heavy suite runs on the machine at a time and the rest wait in line. Before each heavy layer, run `~/.claude/scripts/with-test-slot.sh --status` (from the project root). If it exits 1 (`busy: <label> running …`), announce the wait as its own step **as a plain standalone command** (no loop, variable or `&&` around it): `~/.claude/scripts/pipeline-step.sh start <pipeline-id> "Waiting for test slot"` — only when a pipeline is active. Then run the layer as usual. When it returns, read the `[SLOT acquired waited=<s>s]` line from its log and close the step: `~/.claude/scripts/pipeline-step.sh done <pipeline-id> "Waiting for test slot" --note "waited <duration> behind <label>"`. If the log has a `[HANG …] (no direct alert sent)` line, announce it the same way as a start/done pair named `Test run looks hung` with the marker text as the note — that's the only alert that run's owner gets. A `[HANG …]` line without that suffix already alerted; don't repeat it. Never work around the queue (no running the bare command to skip the line).
+- **Test lanes (projects with a committed `.claude/test-lanes`).** The slot has lanes (`[SLOT acquired waited=<s>s lane=<n> ports=<lo>-<hi>]`). In an opted-in project every heavy run gets its lane's ports as env vars (`TEST_LANE`, `TEST_PORT_BASE`, `FIRESTORE_PORT`, `FIREBASE_AUTH_PORT`, `VITE_PORT`, `VITE_PREVIEW_PORT`, `TEST_APP_PORT_0`..`9`, `FIRESTORE_EMULATOR_HOST` and the other `*_EMULATOR_HOST`s; full list: `with-test-slot.sh --lane-env 1`). Start emulators with `firebase emulators:start --config "$(~/.claude/scripts/lane-firebase-json.sh)"` (or `emulators:exec --config …`), Vite with `--port "$VITE_PORT" --strictPort`, and Playwright `webServer` entries on the lane port. Reusing an existing server is fine inside a lane (the lane's ports are this run's alone, and the pipeline's stack may already serve the app there); the hazard is reuse on shared default ports, so a project outside lanes keeps `reuseExistingServer: false` or `--strictPort`. A `[LANE <n> ports busy: <port>` line means something already listens in that range: report the port, don't kill it. A project without `.claude/test-lanes` keeps its default ports and only runs in lane 1, and gets none of these variables.
+- **Fail fast.** A red suite gives its lane back early: Playwright runs with `--max-failures=5` (vitest `--bail 5`, pytest `--maxfail=5`) while iterating; the final full run before the PR drops the cap only if it found failures worth listing in full. Projects with a smoke check run it as a Playwright project the others list in `dependencies`, so a dead app or emulator skips the rest instead of timing out every test. Steps that build on each other (sign up → add item → share it) sit in one `test.describe.configure({ mode: 'serial' })` group, so a failed step skips the ones after it; independent tests stay parallel. The first failing test lands in the slot history as `first_fail`.

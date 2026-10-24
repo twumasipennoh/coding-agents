@@ -12,7 +12,7 @@ Check once at the start: `echo "${PIPELINE_TAIL_SHIP:-}"`. If it prints `caller`
 
 - **Step 4:** commit only. Skip the push: `pipeline-step.sh skip <pipeline-id> "Push" "caller ships"`.
 - **Step 5:** skip it: `pipeline-step.sh skip <pipeline-id> "Create PR" "caller ships"`.
-- **Step 6:** the final message is the PR description the caller will use (the Step 5 body: Summary, Changes, Gates), with no `PR:` line.
+- **Step 6:** the final message is the PR description the caller will use (the Step 5 body: the ⚠️ failures block if any, Summary, Changes, Gates), with no `PR:` line.
 
 The run is unattended: F2 below takes its unattended path. Anything a step would hold for the user's approval follows the caller's instructions for deferred approvals; never block waiting.
 
@@ -133,9 +133,14 @@ for each gate that reported failure:
     if gate passes: break
     attempt += 1
   if attempt == PHASE_AUDIT_RETRY_BOUND:
-    STOP — report "gate <name> failed after <bound> retries: <persistent issues>"
-    do NOT proceed to Step 2
+    if gate is test-runner or acceptance-tester:
+      gate = "⚠️ needs lead review" — continue to Step 2 (see below)
+    else:
+      STOP — report "gate <name> failed after <bound> retries: <persistent issues>"
+      do NOT proceed to Step 2
 ```
+
+**Test failures go to a lead, not to STOP.** When test-runner (or acceptance-tester, whose red scenarios go in as UNCLASSIFIED, layer `acceptance-tester`) is still red after its retries, don't stop and don't decide what the failures mean: follow test-runner's "New failures need a lead" rule (`~/.claude/agents/test-runner.md`). Mark the gate `⚠️ needs lead review` (never ✓), keep going through the remaining steps and the commit, and put `classify-failures.mjs`'s block at the very top of the PR description and the final report. The PR still opens.
 
 Gate retry counts are **independent** — each gate tracks its own retry count. If auto-fixing one gate introduces a failure in another gate, that other gate gets its own full budget.
 
@@ -145,11 +150,11 @@ The auto-fix loop above is the **unattended** behavior. For the Phase B gates (t
 
 **Detect mode.** *Unattended* if this run was spawned by `pipeline-resume-trigger.sh` / is detached / non-interactive (no live user turn available); *attended* otherwise. **When unsure, treat as unattended** — never block the auto-PR path waiting for a human who isn't there.
 
-**Unattended → autonomous (unchanged):** run the auto-fix retry loop above under the Auto-Fix Constraints, `PHASE_AUDIT_RETRY_BOUND` retries → STOP.
+**Unattended → autonomous:** run the auto-fix retry loop above under the Auto-Fix Constraints, `PHASE_AUDIT_RETRY_BOUND` retries → `⚠️ needs lead review` and continue (Step 1, "Test failures go to a lead").
 
 **Attended → propose-and-gate:** per failing Phase B gate, up to `PHASE_AUDIT_RETRY_BOUND` propose→approve→rerun cycles, with loop state in the pipeline checkpoint (shared with F1) under `f2_attempt`, `f2_pending`, `f2_awaiting_approval`, `f2_rejected`, `f2_ineffective`:
 
-1. **Flake filter (acceptance only):** re-run the gate once before proposing. Passes on retry → flaky, continue, no proposal.
+1. **Retry filter (acceptance only):** re-run the gate once before proposing. Passes on retry → list it under "Passed on retry" (`retries: 1`, with the first run's error line), continue, no proposal. Never call it flaky.
 2. **Diagnose + propose:** invoke **fix-advocate** on the reproducible failure. Its proposal MUST be labelled **assertion-change** vs **code-change** ([test-maintenance]) and MUST respect the Auto-Fix Constraints below (an assertion-weakening "fix" is surfaced for approval, never silently applied).
 3. **No-identical-retry:** hash the proposal's (target + approach summary); if it matches `f2_rejected` or `f2_ineffective`, discard and ask fix-advocate for a different angle. Set `f2_pending` = hash, `f2_awaiting_approval` = true.
 4. **Human gate ([confirm-gate], MANDATORY):** present the proposal and WAIT for a genuine user approval turn. The `approved` transition may ONLY be driven by an actual user message — NEVER by the agent setting a flag itself. On reject → append hash to `f2_rejected`, return to step 2. On approve → clear `f2_awaiting_approval`.
@@ -166,9 +171,8 @@ When auto-fixing test-runner failures, you MUST follow these rules based on the 
 
 **By classification:**
 - **REGRESSION** failures (tests that were passing before our changes): fix the APPLICATION CODE to make the test pass. The test caught a real bug in our changes. Do NOT modify the test.
-- **NEW-FAILING** failures (test-creator's tests for the new feature/fix): fix the APPLICATION CODE to satisfy the test contract. These tests define what the implementation should do. Do NOT modify the test.
-- **UNCLASSIFIED** failures (no baseline available): treat as REGRESSION — fix the application code, not the test.
-- **PRE-EXISTING** failures should never appear under the main-must-be-green rule (see `/feature` Step 0d, `/fix` Step 0b, `/patch` Step 0b — the baseline snapshot hard-blocks if any layer is red). If a PRE-EXISTING failure ever surfaces, it means the baseline block was bypassed or the baseline file is stale/corrupt. Treat as REGRESSION and fix the application code, but first surface a note to the user: "PRE-EXISTING failures appeared despite green-baseline enforcement — baseline artifact may be stale, or a manual bypass occurred. Investigate `.claude/state/test-baseline-<branch>.json`."
+- **UNCLASSIFIED** failures (a new test from test-creator, or no baseline covering the layer): fix the APPLICATION CODE to satisfy the test, not the test.
+- **KNOWN** failures from a committed accepted-failure list (e.g. a red-by-default real-claude layer) are left alone: listed, not fixed, not blocking. KNOWN failures from the *branch* baseline should never appear under the main-must-be-green rule (see `/feature` Step 0d, `/fix` Step 0b, `/patch` Step 0b — the baseline snapshot hard-blocks if any layer is red). If one ever surfaces, it means the baseline block was bypassed or the baseline file is stale/corrupt. Treat as REGRESSION and fix the application code, but first surface a note to the user: "KNOWN failures appeared despite green-baseline enforcement — baseline artifact may be stale, or a manual bypass occurred. Investigate `.claude/state/test-baseline-<branch>.json`."
 
 **Hard rules (never violate):**
 - **NEVER** add `.skip()`, `.todo()`, `xit()`, `xdescribe()`, `@pytest.mark.skip`, `@unittest.skip`, or any test-skipping annotation as an auto-fix.
@@ -285,6 +289,8 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 4. Generate PR body:
 
 ```
+<classify-failures.mjs block, first, when test-runner or acceptance-tester is ⚠️ needs lead review: "## ⚠️ New test failures: needs a lead", Passed on retry, Known failures>
+
 ## Summary
 - <bullet points from commits and implementation context>
 
@@ -311,7 +317,7 @@ Emit the GATES completion log + PR link as the final message (caller-ships mode:
 ```
 GATES: pattern-enforcer ✓ | security-reviewer ✓ | test-gap-auditor ✓ |
        monitoring-spec-validator ✓/DEFERRED | frontend-design-reviewer ✓/SKIPPED |
-       test-runner ✓ | acceptance-tester ✓/DEFERRED/SKIPPED |
+       test-runner ✓/⚠️ needs lead review | acceptance-tester ✓/⚠️ needs lead review/DEFERRED/SKIPPED |
        graduation ✓ (N shadowed, M retired, K disagreed)/skipped/✗ (<reason>) |
        acceptance-regen ✓/current/N-A | doc-updater ✓ |
        memory-review ✓ (<N> actions)

@@ -52,7 +52,7 @@ Once the branch is settled, stamp it onto the checkpoint: `checkpoint.sh set <sl
 
 ### Step 0d — Test Baseline Snapshot
 
-Capture the test suite state BEFORE any implementation begins, from saved receipts where they exist. The baseline lets test-runner classify failures later as PRE-EXISTING vs REGRESSION.
+Capture the test suite state BEFORE any implementation begins, from saved receipts where they exist. The baseline lets test-runner classify failures later as KNOWN vs REGRESSION. New failures are reported per test-runner's "New failures need a lead" rule, never judged here; a layer with a wrapper script (e.g. KaeMe's `verify-real-claude.sh`) runs through it with `--foreground --quiet` when unattended, never the raw command.
 
 1. If `.claude/test-commands.md` doesn't exist, skip this step (test-runner will classify all failures as UNCLASSIFIED); the main-must-be-green block below then does not apply.
 2. `KEY=$(~/.claude/scripts/test-result-cache.sh key)` — the fingerprint of the tracked code, `test-commands.md`, the lockfiles and tool versions. Receipts live in one drawer per repo (`<main checkout>/.claude/state/test-results/`, shared by every worktree, never committed).
