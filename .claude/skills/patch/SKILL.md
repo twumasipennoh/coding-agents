@@ -119,7 +119,7 @@ If the report reveals this isn't a bug but a missing feature or design gap, that
 
 For bug fixes, invoke the **fix-advocate** agent and complete all 7 diagnosis steps. All seven still run in full — the output goes to Mode D and then onto the card, not to the user as its own turn:
 
-1. **Reproduce** — Confirm the bug is reproducible.
+1. **Reproduce** — Trigger the bug for real and keep the evidence, per §1 of `~/.claude/references/repro-check.md` (**Read** it first). The result (`reproduced: …` or `not reproduced: …`) goes on the card and is replayed in Step 5b.
 2. **Locate** — Find the file(s) and line(s) where the bug originates.
 3. **Root cause** — Explain what is actually happening and why, anchored against the user's expected behavior from Step 2.
 4. **Impact** — Describe what is affected (data, UX, security, performance).
@@ -165,7 +165,7 @@ This is the single stop in `/patch`. Emit it in the withhold format from §6 of 
 <root cause (bug fix) or target state (design tweak), one sentence, anchored to file:line>
 <recommended change, one sentence>
 
-options · similar · assumptions · audit
+options · similar · assumptions · audit · repro
 ```
 
 Then the one confirm question. Nothing else in this turn.
@@ -174,6 +174,7 @@ Then the one confirm question. Nothing else in this turn.
 - `similar` — the sibling sweep and cross-project flags from Step 3.
 - `assumptions` — every inferred answer from Step 2, plus the acceptance target state from Step 4, each with what it was inferred from.
 - `audit` — `PASS on attempt N` per auto phase, plus the Mode A gap summary.
+- `repro` — the Step 3 reproduction: the command or steps and what showed the bug, or `not reproduced` with why and the closest approximation.
 
 On a design tweak the diagnosis asks are empty; say so in one line rather than offering names that resolve to nothing. If a before/after description was produced in Step 2, it is the card's first line.
 
@@ -233,6 +234,12 @@ Make the change. Keep it minimal — do not refactor, clean up, or improve surro
 
 **Slice Gate check:** if this task's `FEATURE_PROMPTS.md` entry has `Slice Mode: enabled`, implement as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` instead of one single pass — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation, as silent sub-steps inside this step. Otherwise, proceed normally.
 
+### 5b. Repro Check (bug fixes only, BLOCKING)
+
+**Skip for design tweaks** (`pipeline-step.sh skip patch "Repro Check" "design tweak"`).
+
+Replay the Step 3 reproduction against the fixed code, per §2 of `~/.claude/references/repro-check.md`: announce it as `Repro Check`, one retry back through fix-advocate if the bug is still there, and if it's still there after that, **stop before Step 6**: no `/pipeline-tail`, no PR, the stop card as the final reply. Not reproduced at diagnosis → `skip` with why.
+
 ### 6. Capture known-failure rule (semi-auto, bug fixes only)
 
 **Skip this step for design tweaks.**
@@ -269,13 +276,14 @@ After the implementation and known-failure rule capture are complete, invoke the
 - **display-name:** `Patch`
 - **skill-type:** `patch`
 
-The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
+For bug fixes the PR description carries the `## Repro` before/after from Step 5b. The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
 
-**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
+**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that. The one exception is the Repro Check stop, which never reaches the tail and ends the pipeline itself (`~/.claude/references/repro-check.md` §2.5).
 
 ## Notes
 - For bug fixes: do NOT write code before fix-advocate diagnosis (Step 3) is complete, its Mode D pass is green, and the user approves the Step 3c card.
 - For bug fixes: do NOT write code before test-creator confirms failing tests exist — hard sequencing gate.
+- For bug fixes: do NOT hand off to `/pipeline-tail` while the Step 5b replay still shows the bug.
 - For design tweaks: do NOT implement before the Step 3c card is approved and test-creator confirms acceptance tests exist.
 - If the user explicitly says "skip gates" or "no gates", respect that and only implement. Note this is different from the auto-phase protocol, which drops *stops* while keeping every gate's analysis.
 - The fix must cover all current-project siblings identified in the sibling sweep, unless the user explicitly deferred some at the 5+ threshold.

@@ -117,7 +117,7 @@ If the report reveals this isn't a bug but a missing feature or design gap, that
 
 Invoke the **fix-advocate** agent and complete all 7 diagnosis steps. All seven still run in full — what changes is that the output goes to Mode D and then onto the card, not to the user as its own turn:
 
-1. **Reproduce** — Confirm the bug is reproducible. Identify the exact failure condition.
+1. **Reproduce** — Trigger the bug for real and keep the evidence, per §1 of `~/.claude/references/repro-check.md` (**Read** it first). Identify the exact failure condition. The result (`reproduced: …` or `not reproduced: …`) goes on the card and is replayed in Step 4b.
 2. **Locate** — Find the file(s) and line(s) where the bug originates.
 3. **Root cause** — Explain what is actually happening and why, anchored against the user's expected behavior from Step 1.
 4. **Impact** — Describe what is affected (data, UX, security, performance).
@@ -140,7 +140,7 @@ Now that the diagnosis is approved, initialize the checkpoint so the **implement
 
 1. Derive the task slug (e.g. `fix-<short-symptom>`).
 2. `~/.claude/scripts/checkpoint.sh init <slug> --goal "fix: <one-line symptom>"`, then `checkpoint.sh set <slug> branch "$(git branch --show-current)"` — the task slug is often not the literal branch name, so `/pr` and `/merged` need this explicit field to find the right checkpoint by branch rather than guessing from the filename.
-3. Persist the diagnosis: `checkpoint.sh note <slug> "diagnosis (approved): root-cause=<...>; affected-paths=<...>; proposed-change=<...>"`, then `checkpoint.sh progress <slug>`.
+3. Persist the diagnosis: `checkpoint.sh note <slug> "diagnosis (approved): root-cause=<...>; affected-paths=<...>; proposed-change=<...>; repro=<command or steps, or not reproduced: why>"`, then `checkpoint.sh progress <slug>`.
 
 From here keep the checkpoint current eagerly and run `checkpoint.sh complete <slug>` on terminal success — same protocol as `/feature` Step 0 (note decisions, `progress` per item, keep `## Remaining` accurate). A mid-fix death auto-resumes from this persisted diagnosis + git reconciliation.
 
@@ -171,7 +171,7 @@ This is the single stop in `/fix`. Emit it in the withhold format from §6 of `~
 <root cause, one sentence, anchored to file:line>
 <recommended fix, one sentence>
 
-options · similar · assumptions · audit
+options · similar · assumptions · audit · repro
 ```
 
 Then the one confirm question. Nothing else in this turn.
@@ -180,6 +180,7 @@ Then the one confirm question. Nothing else in this turn.
 - `similar` — the sibling sweep and cross-project flags from Step 2's step 5.
 - `assumptions` — every inferred answer from Step 1, each with what it was inferred from.
 - `audit` — `PASS on attempt N` per auto phase, plus the Mode A gap summary.
+- `repro` — the Step 2 reproduction: the command or steps and what showed the bug, or `not reproduced` with why and the closest approximation.
 
 If the user replies "go" (or equivalent), everything downstream runs unattended to the `/pipeline-tail` handoff.
 
@@ -216,6 +217,10 @@ After test-creator confirms failing tests exist, implement the fix. Make the min
 
 **Slice Gate check:** if this task's `FEATURE_PROMPTS.md`/checkpoint entry has `Slice Mode: enabled`, implement the fix as the per-slice hard-gate loop defined in `~/.claude/references/slice-gate.md` instead of one single pass — implement and verify one tagged slice at a time, pausing at each `[GATE]` for explicit user confirmation, as silent sub-steps inside this step. Otherwise, proceed normally.
 
+### 4b. Repro Check (bug replay, BLOCKING)
+
+Replay the Step 2 reproduction against the fixed code, per §2 of `~/.claude/references/repro-check.md`: announce it as `Repro Check`, one retry back through fix-advocate if the bug is still there, and if it's still there after that, **stop before Step 5**: no `/pipeline-tail`, no PR, the stop card as the final reply. Not reproduced at diagnosis → `skip` with why.
+
 ### 5. Capture known-failure rule (semi-auto)
 
 After the fix is implemented and tests pass, propose a known-failure rule from the root cause. This step feeds the project's failure knowledge base so future features don't repeat the same mistake.
@@ -250,13 +255,14 @@ After the fix is written and the known-failure rule is captured (or skipped), in
 - **display-name:** `Bug Fix`
 - **skill-type:** `fix`
 
-The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
+The PR description carries the `## Repro` before/after from Step 4b. The tail skill handles: quality gates (with auto-fix retry, 3 per gate), doc-updater, memory-review, commit, push, PR creation, and final GATES summary + PR link output.
 
-**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that.
+**Do NOT** call `pipeline-step.sh end`, emit a GATES log, commit, push, or create a PR yourself — the tail skill owns all of that. The one exception is the Repro Check stop, which never reaches the tail and ends the pipeline itself (`~/.claude/references/repro-check.md` §2.5).
 
 ## Notes
 - Do NOT write any fix code before fix-advocate diagnosis (Step 2) is complete, its Mode D pass is green, AND the user approves the Step 2c card.
 - Do NOT write fix code before test-creator confirms failing tests exist — this is a hard sequencing gate.
+- Do NOT hand off to `/pipeline-tail` while the Step 4b replay still shows the bug.
 - If the user says "just fix it", still run fix-advocate and still emit the Step 2c card — this is non-negotiable. Dropping the *stop* is what the auto-phase protocol does; dropping the *analysis* is not on the table.
 - Keep the fix minimal. Resist the urge to clean up surrounding code.
 - The fix must cover all current-project siblings identified in the sibling sweep, unless the user explicitly deferred some at the 5+ threshold.
