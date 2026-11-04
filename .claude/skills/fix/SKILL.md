@@ -96,7 +96,7 @@ Exception: if `.claude/test-commands.md` is missing (step 1 above), the baseline
 
 ### Auto-phase protocol (governs which steps stop)
 
-Steps 1, 2, and 2b are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running them — §1 registers the phase names (`fix-diagnosis`, `fix-test-gap`), §2 holds the retry loop and bound, §3 the escalation test, §4 the Mode D checklist, §6 the card format.
+Steps 1, 2, and 2b are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running them — §1 registers the phase names (`fix-diagnosis`, `fix-test-gap`), §2 holds the retry loop and bound, §3 the escalation test, §4 the Mode D checklist, §6 the card format. Every Mode D pass is run by a fresh `general-purpose` judge per §2 "Running the judge" and `~/.claude/references/goldfish-judge.md` (spawn it with that file's §5 prompt; it sees the phase output, the locked scope and approach, and evidence log paths, nothing else). Never run Mode D yourself on your own output; if the judge can't run, the attempt FAILs and escalates.
 
 `/fix` has **one** human gate: the diagnosis card (Step 2c). Everything before it runs unattended, and every answer inferred along the way ships as a stated assumption on that card.
 

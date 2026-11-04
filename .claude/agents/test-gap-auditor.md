@@ -91,7 +91,9 @@ Two rules that override everything else in this agent file when Mode D is active
 - **Refuse unknown phases.** If the phase name is not in the §1 registry, emit `REFUSED — unknown phase '<name>'; no audit criteria defined` and return non-PASS. Do not infer criteria from the name, do not fall back to a generic checklist.
 - **No vacuous pass.** A phase output with zero citations FAILs. An empty checklist is never a PASS.
 
-**Output:** the Mode D verdict block from §4 — `Mode D (<phase>): N items checked, M FAIL`, one line per D-item, closing `VERDICT: PASS | FAIL | REFUSED`.
+**Who runs it:** a fresh `general-purpose` subagent, never the session that produced the phase output. Spawn and score per `~/.claude/references/goldfish-judge.md` (prompt template §5, rubric §2, rules §3); the caller-side loop, tree guard and judge-unavailable path are in §2 of the protocol doc.
+
+**Output:** the Mode D verdict block from §4 — `Mode D (<phase>): N items checked, M FAIL`, one line per D-item, then the judge's `SCORE:`, `EVIDENCE:` and `OPEN:` lines, closing `VERDICT: PASS | FAIL | REFUSED`. PASS needs every D-item PASS and `SCORE` ≥ `GOLDFISH_PASS_SCORE`.
 
 **Gate behavior:** NOT user-blocking — a FAIL feeds the caller's per-phase retry loop (bound and escalation rules in §2 of the protocol doc). Exhaustion escalates to the user with the full attempt history.
 

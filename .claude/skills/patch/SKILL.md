@@ -89,7 +89,7 @@ State your classification and proceed.
 
 ### Auto-phase protocol (governs which steps stop)
 
-Steps 2, 3, 3b, and the acceptance target-state step are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running them — §1 registers the phase names (`patch-diagnosis`, `patch-test-gap`, `patch-acceptance`), §2 holds the retry loop and bound, §3 the escalation test, §4 the Mode D checklist, §6 the card format.
+Steps 2, 3, 3b, and the acceptance target-state step are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running them — §1 registers the phase names (`patch-diagnosis`, `patch-test-gap`, `patch-acceptance`), §2 holds the retry loop and bound, §3 the escalation test, §4 the Mode D checklist, §6 the card format. Every Mode D pass is run by a fresh `general-purpose` judge per §2 "Running the judge" and `~/.claude/references/goldfish-judge.md` (spawn it with that file's §5 prompt; it sees the phase output, the locked scope and approach, and evidence log paths, nothing else). Never run Mode D yourself on your own output; if the judge can't run, the attempt FAILs and escalates.
 
 `/patch` has **one** human gate: the diagnosis card (Step 3c). Every answer inferred before it ships as a stated assumption on that card.
 
