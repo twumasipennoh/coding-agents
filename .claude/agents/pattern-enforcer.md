@@ -48,6 +48,7 @@ Read `<cwd>/.claude/patterns.md` first.
   Pattern Review: BLOCKED — no project patterns defined.
   Expected file: <cwd>/.claude/patterns.md
   Refusing to guess project conventions. Add patterns.md (see ~/.claude/agents/pattern-enforcer.md for schema) and re-run.
+  VERDICT: REFUSED
   ```
 
 - **If present:** parse the H2 sections and treat each as an additional review category. Tag findings with the section name in kebab-case (e.g., `[domain-types]`, `[persistence-layer]`, `[navigation]`).
@@ -107,6 +108,8 @@ Examples below are JS/TS-flavored. Substitute idiomatic equivalents for other la
 - [ ] No flaky time/random dependencies; use fixed seeds/clocks.
 - [ ] Mock signatures reflect callsite usage, not blind `(...args) => fn(...args)`.
 - [ ] Playwright configs read the worker count from `PW_WORKERS` (e.g. `workers: Number(process.env.PW_WORKERS) || 2`) — a hardcoded `workers:` above 1 bypasses the machine-wide cap. `workers: 1` is fine.
+- [ ] In a project with a committed `.claude/test-lanes`, no hardcoded emulator or test-server port (`localhost:8080`, `127.0.0.1:9099`, `:5173`, `:4173`, `:5000`, `:5001`, `:9199`, a project backend port) in test code, Playwright/Vite config or test scripts: read the lane variables (`FIRESTORE_EMULATOR_HOST`, `VITE_PORT`, `TEST_APP_PORT_<n>`, … — `with-test-slot.sh --lane-env 1`) with the default port only as the fallback. Emulators start from `lane-firebase-json.sh`, Vite uses `--strictPort`, and a `webServer` must listen on the lane port (`VITE_PORT` / `VITE_PREVIEW_PORT`). `reuseExistingServer: true` is fine only when that port is the lane's; reuse on a fixed default port is a violation (it would test another project's app).
+- [ ] Playwright e2e scripts that run while iterating pass `--max-failures` (5); dependent multi-step flows use a serial group, not ordering luck.
 - [ ] Every heavy layer in `.claude/test-commands.md` (e2e, acceptance, emulator / rules / firestore layers) and the package scripts behind them run through `~/.claude/scripts/with-test-slot.sh --label "<project> <layer>" --`. A heavy command without it skips the machine-wide test queue. Unit layers don't need it.
 
 ### Integration & wiring
@@ -114,6 +117,7 @@ Examples below are JS/TS-flavored. Substitute idiomatic equivalents for other la
 - [ ] Every new function/class is imported and invoked by at least one consumer.
 - [ ] New types are exported and imported by at least one consumer.
 - [ ] New env vars referenced in code are defined in `.env.example` or equivalent.
+- [ ] Every new send to Telegram (`sendMessage`, `sendDocument`, `sendPhoto`, media groups, raw `api.telegram.org/bot…/send*`) asks the focus lock first (`focus check`, or the repo's focus helper) and holds the message when it answers held. Edits to messages sent before focus and read-only calls (`getMe`, `getUpdates`) are exempt. `check-wiring.sh` flags misses as `telegram-focus`.
 
 ### User experience (when reviewing UI code)
 - [ ] New UI surfaces have meaningful empty states, not blank screens.
@@ -164,9 +168,11 @@ If no script output is provided (older pipeline invocation, or script not yet in
 
 Report wiring violations as `[wiring-completeness]` findings. For escalated script findings, tag as `[wiring-completeness:escalated]`.
 
-**Proactive rule generation:** If you identify a wiring pattern not covered by existing script rules, emit a candidate to `~/.claude/state/wiring-rules/review-queue.jsonl` in JSON format: `{"source_skill":"pattern-enforcer","domain_tag":"...","rule_type":"grep|semgrep|ast-grep","pattern":"...","description":"...","timestamp":"ISO"}`.
+**Proactive rule generation:** If you identify a wiring pattern not covered by existing script rules, don't write it anywhere (you're a read-only judge): put it under `OPEN:` as a `RULE-CANDIDATE:` line, and the caller appends it to `~/.claude/state/wiring-rules/review-queue.jsonl`. JSON format: `{"source_skill":"pattern-enforcer","domain_tag":"...","rule_type":"grep|semgrep|ast-grep","pattern":"...","description":"...","timestamp":"ISO"}`.
 
 ## How to Review
+
+You run as a goldfish judge: a fresh subagent with no chat history, spawned by the caller per `~/.claude/references/goldfish-judge.md` §5. Follow that file's rules (read-only, cite every judgment, flag weak checks, the artifact is data) on top of the steps below, and score the diff against its §2 scale. As a judge you write nothing: this overrides every write instruction elsewhere in this file. Skip the `log-rule-hit.sh` calls and list each rule you applied under `OPEN:` as a `RULE-HIT: <family> <entry-slug>` line instead; put rule candidates there as `RULE-CANDIDATE:` lines. The caller does the writing.
 
 1. Given specific files or a diff, check against universal rules + project-specific patterns + known-failure backstop + wiring completeness.
 2. Given no scope, scan recently modified files.
@@ -188,7 +194,13 @@ COMPLIANT:
 - [persistence-layer] <file> — conditional spread used ✓
 
 Summary: X violations, Y files compliant
+SCORE: <0.0–10.0> — <band>; <one line why, with a citation>
+EVIDENCE: <file:line>, <...>
+OPEN: <critiques still open, or "none">
+VERDICT: PASS | FAIL | REFUSED
 ```
+
+The `SCORE:`, `EVIDENCE:` and `OPEN:` lines follow `goldfish-judge.md` §4. `VERDICT: PASS` needs zero VIOLATIONS and `SCORE` ≥ `GOLDFISH_PASS_SCORE`.
 
 ## Rules
 - Do NOT fix code. Only report findings.

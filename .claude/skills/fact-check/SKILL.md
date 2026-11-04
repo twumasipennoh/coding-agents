@@ -13,6 +13,8 @@ The user invokes `/fact-check` (or says "fact-check this", "poke holes in this",
 
 `/polish` also runs this skill in a fresh subagent during its structure pass — see **Subagent mode** below.
 
+**Fresh judge per round.** In interactive mode the session talking to the user never audits on its own. Each audit pass (the first audit and every revision in Passes 2..N) spawns a new `general-purpose` subagent for each round (never reused across passes), told to read this file and run its **Subagent mode**, and given only the current target text (the author's latest revision, verbatim, inside `<artifact>` tags) plus the rules in `~/.claude/references/goldfish-judge.md`. The subagent never sees the previous round's verdict or drill-downs. The session relays the subagent's drill-down, carries the conversation, and decides which item is next. Snapshot `{ git status --porcelain; git diff | sha256sum; }` before each round and after it; a change means discard that round and tell the user the judge modified the tree. Read the subagent's **last** `SCORE:` line; if it can't run or returns no `SCORE:` line, say so and stop; don't audit inline, and never end with LGTM.
+
 ## Usage
 
 ```
@@ -102,7 +104,7 @@ Drill-downs are ordered worst-first (❌ before ⚠️). ✅ items get no drill-
 
 - **Continuous critique.** When the author replies with a revision or counter-proposal to the current drill-down, audit the revision against the code, challenge remaining holes under the relevant lenses, and ask for the next refinement.
 - **Next item.** Once an item is resolved, advance to the next drill-down (`### Drill-down 2 of N`) in the same format.
-- **Termination (LGTM).** When every item has been defended and no unbacked assumptions remain, end the loop with:
+- **Termination (LGTM).** When every item has been defended, no unbacked assumptions remain, and the latest round's fresh judge scored the text at or above `GOLDFISH_PASS_SCORE` (`~/.claude/references/goldfish-judge.md` §1), end the loop with:
 
   ```markdown
   ✅ **LGTM: no obvious architectural flaws or unbacked assumptions remaining.**
@@ -119,6 +121,7 @@ When spawned by another skill (the prompt says "run its subagent mode"), there i
 
 ```markdown
 VERDICT: [X] grounded, [Y] vulnerable, [Z] disproved
+SCORE: [0.0–10.0] — [band from goldfish-judge.md §2]; [one line why, with a citation]
 
 ITEMS:
 - [n]. [status emoji] [topic] — [one-sentence verdict] — lens: [TL|ONCALL|PLATFORM|SEC|AGENT] — cite: [file:line or "unverifiable here: <why>"]

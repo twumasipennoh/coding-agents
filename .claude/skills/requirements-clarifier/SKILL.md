@@ -6,7 +6,7 @@ Run the **requirements-clarifier** agent before any feature or bug fix. Walks th
 
 ## Auto-phase protocol (governs which phases stop)
 
-Phases 3, 4, Phase 5's plan production, Phase 2b's UX-only path, and a trivially-skippable Phase 1b are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running any of them — it carries the phase registry (§1), the retry loop and its bound (§2), the escalation test (§3), the Mode D checklist (§4), and the closing-card format (§6).
+Phases 3, 4, Phase 5's plan production, Phase 2b's UX-only path, and a trivially-skippable Phase 1b are **auto phases**: they do all of their work, then a `test-gap-auditor` **Mode D** pass replaces the human stop. **Read** `~/.claude/references/auto-phase-protocol.md` before running any of them — it carries the phase registry (§1), the retry loop and its bound (§2), the escalation test (§3), the Mode D checklist (§4), and the closing-card format (§6). Every Mode D pass is run by a fresh `general-purpose` judge per §2 "Running the judge" and `~/.claude/references/goldfish-judge.md` (spawn it with that file's §5 prompt; it sees the phase output, the locked scope and approach, and evidence log paths, nothing else). Never run Mode D yourself on your own output; if the judge can't run, the attempt FAILs and escalates.
 
 Four phases still stop for the user: **1** (scope), **1b** (build/buy — only when a genuine choice exists), **2** (approach), and **5** (the fused plan + slice card). Three when 1b is trivially skipped.
 
