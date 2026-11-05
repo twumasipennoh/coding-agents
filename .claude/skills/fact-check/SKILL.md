@@ -104,7 +104,7 @@ Drill-downs are ordered worst-first (❌ before ⚠️). ✅ items get no drill-
 
 - **Continuous critique.** When the author replies with a revision or counter-proposal to the current drill-down, audit the revision against the code, challenge remaining holes under the relevant lenses, and ask for the next refinement.
 - **Next item.** Once an item is resolved, advance to the next drill-down (`### Drill-down 2 of N`) in the same format.
-- **Termination (LGTM).** When every item has been defended, no unbacked assumptions remain, and the latest round's fresh judge scored the text at or above `GOLDFISH_PASS_SCORE` (`~/.claude/references/goldfish-judge.md` §1), end the loop with:
+- **Termination (LGTM).** When every item has been defended, no unbacked assumptions remain, and the latest round's fresh judge left no `MUST` line and scored the text at or above `GOLDFISH_PASS_SCORE` (relay its `POLISH` lines as optional notes) (`~/.claude/references/goldfish-judge.md` §1), end the loop with:
 
   ```markdown
   ✅ **LGTM: no obvious architectural flaws or unbacked assumptions remaining.**
