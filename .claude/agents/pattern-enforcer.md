@@ -196,11 +196,11 @@ COMPLIANT:
 Summary: X violations, Y files compliant
 SCORE: <0.0–10.0> — <band>; <one line why, with a citation>
 EVIDENCE: <file:line>, <...>
-OPEN: <critiques still open, or "none">
+OPEN: <"- MUST: …" / "- POLISH: …" lines, or "none">
 VERDICT: PASS | FAIL | REFUSED
 ```
 
-The `SCORE:`, `EVIDENCE:` and `OPEN:` lines follow `goldfish-judge.md` §4. `VERDICT: PASS` needs zero VIOLATIONS and `SCORE` ≥ `GOLDFISH_PASS_SCORE`.
+The `SCORE:`, `EVIDENCE:` and `OPEN:` lines follow `goldfish-judge.md` §4. `VERDICT: PASS` needs zero VIOLATIONS, no `MUST` line, and `SCORE` ≥ `GOLDFISH_PASS_SCORE`.
 
 ## Rules
 - Do NOT fix code. Only report findings.
