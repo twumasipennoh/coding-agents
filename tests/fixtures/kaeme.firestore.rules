@@ -1,0 +1,568 @@
+rules_version = '2';
+
+// KaeMe — F63 Slice 2 (Task 63.4a) + Slice 3 (Task 63.4b).
+//
+// The browser talks to Firestore directly, so THESE RULES ARE THE
+// AUTHORIZATION. There is no server-side handler between a tampered client and
+// the database. (The daemon writes through firebase-admin, which bypasses rules
+// entirely; its boundary is F62's per-user root + assertSafeUserId, and F64.)
+//
+// What's open, all of it only for a signed-in owner whose token says
+// `email_verified == true` (Google counts as verified; an unverified password
+// account gets nothing — the "continue" button forces a token refresh so the
+// claim is current):
+//   - read anything under users/{uid}/ (any depth)
+//   - create / update the profile at users/{uid}/profile/main, in exactly the
+//     shape the browser bootstrap writes (apps/web/src/features/auth/
+//     accountShape.ts buildProfile). createdAt and uid are immutable; the
+//     onboarding marker is the one field a client can set freely (A5 — the
+//     only lie a tampered browser can tell is about its own onboarding).
+//     The profile can't be deleted.
+//   - create the Inbox, only at the fixed id and only in the Inbox's exact
+//     shape (a complete F62 notebook doc, see buildInboxDoc). Its identity
+//     fields (and its status — it can't be archived) are immutable afterwards,
+//     it can't be deleted, and its display stays editable (F61).
+//   - (Slice 3) create / update / delete docs at exactly
+//     users/{uid}/<C>/{docId} for every collection C the daemon's
+//     SyncListener applies (LISTENED_COLLECTIONS — isClientWritableCollection
+//     below). The other F62 collections (inboundTurns, turnReplies —
+//     isDaemonOnlyCollection) are owner-read-only.
+//     tests/unit/f63-rules-coverage.test.ts derives both lists from source and
+//     fails if one drifts. No other collection and no nested sub-collection is
+//     writable. A non-Inbox notebook can't claim the Inbox's slug or name.
+//   - (F64 Slice 2) CREATE a pending web turn request at
+//     users/{uid}/turnRequests/{requestId}, in exactly the send box's shape
+//     with `clientSentAtMs` within 60s of request.time, optionally carrying a
+//     tapped `answer: { promptId, reply }` (F65c)
+//     (isClientCreateOnlyCollection). Never update or delete one.
+//   - (F65c Slice 2, DEC-416) create / update the browser's own per-chat state
+//     at users/{uid}/chatPrefs/{notebookId}: { uid, pinned?, pinOrder?,
+//     seenReplyCount? } and nothing else, merge-created carrying uid. Never
+//     deleted. The Chats rows themselves (chats/{notebookId}) are daemon-only.
+//   - (F68, DEC-519) create / update the owner's model chain at exactly
+//     users/{uid}/modelChain/current: { uid, entries, aideBackup?, aideIndex? }, each entry
+//     a pointer to a secret, never the secret. Each entry's status
+//     (modelChainStatus) is daemon-only. Encrypted keys and tokens live in a
+//     top-level collection that no rule here matches (default deny).
+// Every create/update requires `request.resource.data.uid == uid` (the F62 doc
+// shape, tests/fixtures/f62-uid-required.rules). On an update,
+// request.resource.data is the MERGED doc, so a `merge:true` partial update of
+// an existing doc passes while a `merge:true` that creates without `uid` fails
+// (the [firestore] merge-create rule). No get() chaining in create rules.
+// No flat per-field size caps on synced docs: request.resource.data is the
+// merged doc, so a flat cap would also block every edit of a long entry the
+// daemon wrote; Firestore's 1 MiB doc limit is the bound (DEC-325 accepted
+// risk). Two exceptions. Skills (F102): the wording is capped at 16000 to
+// match the daemon's own cap, and every skill write is refereed by its
+// users/{uid}/skillNames/{name} doc (see isValidSkillCreate below). And
+// entries (F66, DEC-403): `content` is capped at 16000 only on a write that
+// changes it (affectedKeys hasAny content, see hasValidEntryContent), so a
+// `done` toggle on a long KaeMe entry still passes.
+//
+// The literals below (the Inbox id / slug / name / template / display, the
+// theme list, the 60-char display-name cap, the profile key set) are pinned to
+// their producers by tests/unit/f63-constants-parity.test.ts — change them
+// together. The behavioural suite is apps/web/e2e/firestore-rules.emulator.spec.ts
+// (`npm run test:web:e2e:emulator`). Deploy only via `npm run deploy:rules:*`,
+// which runs the drift gate first.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // HabitTracker's isOwner pattern, plus the email-verified gate.
+    function isVerifiedOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+    }
+
+    // F65a Slice 2 (DEC-357, A3): `notebookView` is OPTIONAL — allowed by
+    // hasOnly, never required by hasAll, so a pre-F65a 5-key profile still
+    // saves. Absent reads as 'flat'; anything outside the enum is denied.
+    function isValidProfile(uid) {
+      let d = request.resource.data;
+      return d.get('notebookView', 'flat') in ['flat', 'hierarchy']
+        && d.keys().hasOnly(['uid', 'displayName', 'theme', 'onboardingCompletedAt', 'createdAt',
+          'notebookView'])
+        && d.keys().hasAll(['uid', 'displayName', 'theme', 'onboardingCompletedAt', 'createdAt'])
+        && d.uid == uid
+        && d.displayName is string
+        && d.displayName.size() > 0
+        && d.displayName.size() <= 60
+        && !d.displayName.matches('\\s*')
+        // F101: THEMES + the retired 'dusk' (LEGACY_THEMES), permanently — this
+        // validates the MERGED doc, so a profile still holding 'dusk' must keep
+        // passing on a display-name edit. The web reads 'dusk' as 'system'.
+        && d.theme in ['system', 'neutral', 'forest', 'pink', 'paper', 'charcoal', 'ink', 'dusk']
+        && (d.onboardingCompletedAt == null || isTimestampString(d.onboardingCompletedAt))
+        && isTimestampString(d.createdAt);
+    }
+
+    // An ISO timestamp string, size-capped so a tampered client can't park an
+    // arbitrarily large string in an otherwise fixed-shape doc.
+    function isTimestampString(v) {
+      return v is string && v.size() <= 40;
+    }
+
+    function isValidInbox(uid, notebookId) {
+      let d = request.resource.data;
+      return notebookId == 'inbox'
+        && d.keys().hasOnly(['id', 'slug', 'name', 'type', 'templateId', 'status', 'createdAt',
+          'updatedAt', 'configOverrides', 'aliases', 'customFields', 'display', 'uid', 'loweredName'])
+        && d.keys().hasAll(['id', 'slug', 'name', 'type', 'templateId', 'status', 'createdAt',
+          'updatedAt', 'configOverrides', 'aliases', 'customFields', 'display', 'uid', 'loweredName'])
+        && d.id == 'inbox'
+        && d.slug == 'inbox'
+        && d.name == 'Inbox'
+        && d.loweredName == 'inbox'
+        && d.type == 'finite'
+        && d.templateId == 'miscellaneous'
+        && d.status == 'active'
+        && isTimestampString(d.createdAt)
+        && isTimestampString(d.updatedAt)
+        && d.configOverrides == {}
+        && d.aliases == []
+        && d.customFields == []
+        && d.display == {'layout': 'list', 'pinned': true, 'icon': '📥'}
+        && d.uid == uid;
+    }
+
+    // Slice 3 — the synced collections a client may write: exactly what the
+    // daemon's SyncListener applies (LISTENED_COLLECTIONS in
+    // src/sync/sync-listener.ts).
+    function isClientWritableCollection(collection) {
+      return collection in ['notebooks', 'entries', 'links', 'schedules', 'reminders', 'skills'];
+    }
+
+    // The rest of SYNC_COLLECTIONS: written only by the daemon (firebase-admin,
+    // which bypasses rules). The owner reads them through the users/{uid}/**
+    // read rule; no client create / update / delete, so a browser can't forge
+    // a turn or a reply. Named here so the coverage test sees every collection.
+    // F64 (DEC-350): daemonPresence isn't a sync collection, but it's the same
+    // shape of thing — stamped by the daemon's PresenceWriter, read by the
+    // browser to decide "KaeMe is offline", never client-writable (a forged
+    // stamp would say "awake" for a daemon that's down).
+    // F65c Slice 2 (DEC-416): chats, one Chats-list row per notebook, is kept
+    // by the daemon's ChatSummaryStore; a forged row would fake a preview or
+    // an unread count.
+    // F68 (DEC-519, S20): modelChainStatus is each chain entry's status
+    // ("Working" / "Skipped 1 min"), stamped by the daemon after every attempt;
+    // a forged "Working" would hide a dead model.
+    function isDaemonOnlyCollection(collection) {
+      return collection in ['inboundTurns', 'turnReplies', 'daemonPresence', 'chats',
+        'modelChainStatus'];
+    }
+
+    // F64 Slice 2 (DEC-348/349): the third category. The browser may only
+    // CREATE a doc here (a pending web turn request); the daemon
+    // (firebase-admin) moves its status and writes the reply. Never in
+    // isClientWritableCollection (a browser could forge `answered` or a
+    // reply), never daemon-only (the browser could never send at all).
+    function isClientCreateOnlyCollection(collection) {
+      return collection in ['turnRequests'];
+    }
+
+    // Exactly the five fields the send box writes, plus an optional `answer`
+    // (F65c, a tapped button) or `skill` (F102 Task 102.12, a skill chip;
+    // never both). `clientSentAtMs` is the
+    // browser's clock and must be within 60s of request.time: a write the
+    // phone queued offline and replayed later is refused, so a stale message
+    // never reaches KaeMe (DEC-349). The 4000 cap matches the daemon's shape
+    // check (src/sync/remote-shape.ts MAX_TURN_MESSAGE_LENGTH).
+    function isValidTurnRequest(uid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'notebookId', 'message', 'clientSentAtMs', 'status', 'answer', 'skill'])
+        && d.keys().hasAll(['uid', 'notebookId', 'message', 'clientSentAtMs', 'status'])
+        && d.uid == uid
+        && d.notebookId is string
+        && d.notebookId.size() > 0
+        && d.notebookId.size() <= 128
+        && d.message is string
+        && d.message.size() > 0
+        && d.message.size() <= 4000
+        && d.clientSentAtMs is number
+        && math.abs(d.clientSentAtMs - request.time.toMillis()) <= 60000
+        && d.status == 'pending'
+        && (!('answer' in d) || isValidTurnAnswer(d.answer))
+        && (!('skill' in d) || (!('answer' in d) && isValidTurnSkill(d.skill)));
+    }
+
+    // F102 Task 102.12 (DEC-507) — a skill chip: { name, args, extra? }. The
+    // rules can't loop over `args`, so they cap its size (20) and the daemon's
+    // shape check (src/sync/remote-shape.ts isValidSkillRun) checks every key
+    // and value (a blank name, 1..500 chars). `extra` matches the message cap.
+    function isValidTurnSkill(s) {
+      return s is map
+        && s.keys().hasOnly(['name', 'args', 'extra'])
+        && s.keys().hasAll(['name', 'args'])
+        && isSkillName(s.name)
+        && s.args is map
+        && s.args.size() <= 20
+        && (!('extra' in s) || (s.extra is string && s.extra.size() > 0 && s.extra.size() <= 4000));
+    }
+
+    // F65c Slice 1 (SEAM-9, DEC-414) — a tap: { promptId, reply } and nothing
+    // else. The caps and id charset match the daemon's shape check
+    // (src/sync/remote-shape.ts MAX_PROMPT_ID_LENGTH / MAX_ANSWER_REPLY_LENGTH)
+    // and the web writer (apps/web/src/features/chat/turnRequest.ts).
+    function isValidTurnAnswer(a) {
+      return a is map
+        && a.keys().hasOnly(['promptId', 'reply'])
+        && a.keys().hasAll(['promptId', 'reply'])
+        && a.promptId is string
+        && a.promptId.matches('^[A-Za-z0-9_-]{1,64}$')
+        && a.reply is string
+        && a.reply.size() > 0
+        && a.reply.size() <= 200;
+    }
+
+    // F65c Slice 2 (SEAM-20, SEAM-21, DEC-416) — the browser's per-chat state:
+    // read position, pin and pin order. The doc id is the notebook id (the
+    // same charset as a turn request's notebookId). Every write is a
+    // `merge:true` set carrying uid, so request.resource.data is the merged
+    // doc and a first merge-create without uid is denied. Each field is
+    // optional; when present it must be the right type, and the seen count and
+    // pin order non-negative integers (the web writes positions 0..n-1). The daemon never reads this.
+    function isValidChatPrefs(uid, notebookId) {
+      let d = request.resource.data;
+      return d.uid == uid
+        && notebookId.matches('^[A-Za-z0-9_-]{1,128}$')
+        && d.keys().hasOnly(['uid', 'pinned', 'pinOrder', 'seenReplyCount'])
+        && (!('pinned' in d) || d.pinned is bool)
+        && (!('pinOrder' in d) || (d.pinOrder is int && d.pinOrder >= 0))
+        && (!('seenReplyCount' in d) || (d.seenReplyCount is int && d.seenReplyCount >= 0));
+    }
+
+    // The F62 doc shape: the owner's uid on every written doc.
+    function isOwnedSyncDoc(uid) {
+      return request.resource.data.uid == uid;
+    }
+
+    // A notebook anywhere but the fixed Inbox id may not claim the Inbox's
+    // identity (the daemon finds the Inbox by slug).
+    function isNotInboxImpostor(collection) {
+      return collection != 'notebooks'
+        || (request.resource.data.get('slug', '') != 'inbox'
+          && request.resource.data.get('loweredName', '') != 'inbox');
+    }
+
+    // F65a Slice 2 (DEC-357, A2): a notebook's per-parent Notebook ⇄ Folder
+    // choice. Absent is valid (reads as 'notebook') and never required, so a
+    // pre-F65a doc's next update still passes; anything outside the enum is
+    // denied, or the daemon would refuse the whole doc (remote-shape-rejected).
+    function hasValidChildView(collection) {
+      let d = request.resource.data;
+      return collection != 'notebooks'
+        || !(d.get('display', null) is map)
+        || d.display.get('childView', 'notebook') in ['notebook', 'folder'];
+    }
+
+    // F65a Slice 3 (DEC-356, SEAM-7): an EXISTING notebook is the Inbox when
+    // it sits at the fixed id OR its stored slug is 'inbox'. F62 migrated
+    // kwaku's Inbox at a nanoid id with slug 'inbox'; without this branch that
+    // doc read as an impostor and every home save to it was denied. Only an
+    // existing doc qualifies (resource.data is the stored doc, which the
+    // client can't choose), so a NEW doc at a random id still can't claim the
+    // slug — isNotInboxImpostor keeps denying that create.
+    function isExistingInbox(collection, docId) {
+      return collection == 'notebooks'
+        && (docId == 'inbox'
+          || (resource != null && resource.data.get('slug', '') == 'inbox'));
+    }
+
+    // F65a Slice 3 (DEC-358, SEAM-5): a notebook's activity stamp. Optional
+    // (absent reads as createdAt), but when present it's an ISO string capped
+    // at 40 chars on EVERY notebook, Inbox or not — the daemon's remote-shape
+    // check would otherwise refuse the whole doc.
+    function hasValidLastEntryAt(collection) {
+      return collection != 'notebooks'
+        || !('lastEntryAt' in request.resource.data)
+        || isLastEntryAtString(request.resource.data.lastEntryAt);
+    }
+
+    // F66 Slice 1 (DEC-403): an entry's words are capped at 16000 characters
+    // on a browser write that CHANGES them (or creates the entry with them).
+    // Scoped by affectedKeys because request.resource.data is the merged doc:
+    // a flat cap would also refuse a `done` toggle on a long entry KaeMe
+    // wrote. One number with MAX_ENTRY_CONTENT_LENGTH
+    // (src/types/entry-content-cap.ts), which the daemon's remote-shape check
+    // and the web editor import; tests/unit/f66-content-cap-parity.test.ts
+    // pins this literal to it.
+    function hasValidEntryContent(collection) {
+      return collection != 'entries'
+        || (resource != null
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['content']))
+        || (resource == null && !('content' in request.resource.data))
+        || (request.resource.data.content is string
+          && request.resource.data.content.size() <= 16000);
+    }
+
+    // F66 Slice 1 (DEC-399), security LOW: an entry's `editedAt` is optional,
+    // but when present it's an ISO string (≤40 chars), mirroring the daemon's
+    // entryReason; otherwise the daemon refuses the whole doc and the cloud
+    // and disk copies disagree.
+    function hasValidEditedAt(collection) {
+      return collection != 'entries'
+        || !('editedAt' in request.resource.data)
+        || isLastEntryAtString(request.resource.data.editedAt);
+    }
+
+    // Gate fix (security LOW): the ISO shape too, mirroring the daemon's
+    // isLastEntryAt (src/types/notebook.ts) — date, optional time, optional
+    // fraction, optional `Z` or `±hh:mm` offset. A non-ISO string would sort
+    // as createdAt on the web and be refused whole by the daemon.
+    function isLastEntryAtString(v) {
+      return isTimestampString(v)
+        && v.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2}([.][0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})?)?');
+    }
+
+    // The Inbox (fixed id or legacy id — isExistingInbox) keeps its identity
+    // on every update, and its status: the browser can't archive or
+    // soft-delete the catch-all. display is deliberately NOT here — F61's pin
+    // / layout / icon edits apply to the Inbox like any notebook
+    // (setNotebookDisplay has no Inbox exemption).
+    function keepsInboxIdentity(collection, docId) {
+      return !isExistingInbox(collection, docId)
+        || !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['id', 'slug', 'name', 'loweredName', 'type', 'templateId', 'status', 'uid',
+            'createdAt']);
+    }
+
+    // F102 (S6, DEC-388/389) — skills. A browser skill write is ALWAYS a batch
+    // with its referee doc users/{uid}/skillNames/{name} = { uid, skillId }:
+    // the skill must hold its own name doc after the write (existsAfter +
+    // matching skillId), a rename must also drop the old one, and a name doc
+    // can only be created (never overwritten) — so two devices can't both own
+    // a name. Code-backed (tier-3, no wording) skills are never client-written
+    // or edited; a worded tier-3 skill can be, and lands on tier 2.
+    // The name regex is SKILL_NAME_PATTERN (src/util/assert-safe-skill-name.ts)
+    // and 16000 is MAX_SKILL_PROMPT_LENGTH (src/types/skill.ts), pinned by
+    // tests/unit/f102-skill-rules-parity.test.ts. Names are already lowercase,
+    // so the name IS the referee doc id. The daemon (firebase-admin) writes
+    // the same pair in one transaction and bypasses these rules.
+    function isSkillName(v) {
+      return v is string && v.matches('[a-z0-9][a-z0-9_-]{0,63}');
+    }
+
+    function isSkillDocId(v) {
+      return v is string && v.matches('[A-Za-z0-9_-]{1,128}');
+    }
+
+    function skillNamesPath(uid, name) {
+      return /databases/$(database)/documents/users/$(uid)/skillNames/$(name);
+    }
+
+    function skillDocPath(uid, skillId) {
+      return /databases/$(database)/documents/users/$(uid)/skills/$(skillId);
+    }
+
+    function isValidSkillShape(uid, docId) {
+      let d = request.resource.data;
+      return d.uid == uid
+        && d.id == docId
+        && isSkillName(d.name)
+        && d.tier in [1, 2]
+        && d.prompt is string
+        && d.prompt.size() > 0
+        && d.prompt.size() <= 16000
+        && d.ioShape is map
+        && d.metadata is map
+        && (!('notebookId' in d) || isSkillDocId(d.notebookId));
+    }
+
+    // After this write the skill's own name doc exists and points back at it.
+    function holdsSkillName(uid, docId) {
+      return existsAfter(skillNamesPath(uid, request.resource.data.name))
+        && getAfter(skillNamesPath(uid, request.resource.data.name)).data.skillId == docId;
+    }
+
+    // The stored name's doc is gone (or no longer this skill's) after the write.
+    function releasesStoredSkillName(uid, docId) {
+      return !existsAfter(skillNamesPath(uid, resource.data.name))
+        || getAfter(skillNamesPath(uid, resource.data.name)).data.skillId != docId;
+    }
+
+    function isValidSkillCreate(uid, docId) {
+      return isValidSkillShape(uid, docId) && holdsSkillName(uid, docId);
+    }
+
+    // fix/long-skill-wont-save — a stored tier-3 skill WITH wording is the
+    // owner's own skill that chat saved as tier 3 before DEC-496, not a
+    // code-backed built-in (the web reads built-in as "no wording"). The app
+    // may edit or delete it; isValidSkillShape still only lets the edit write
+    // tier 1 or 2, so editing it moves it to tier 2. A tier-3 skill with no
+    // wording (blank or whitespace) stays locked. Daemon copy of the same
+    // rule: isWordedTier3Skill (src/types/skill.ts), used by the sync listener.
+    // "Has wording" = at least one character JS trim() keeps (tab, LF, VT,
+    // FF, CR, every Unicode space/separator incl. NBSP and U+3000, and BOM are
+    // whitespace). The rules' own trim() keeps NBSP, so it can't be used here.
+    // Security fix round 1: a tier-3 doc carrying `codeBacked` (any value) is
+    // locked whatever its wording, so a code-backed skill with a prompt
+    // (F22) can never be edited, deleted or demoted from the browser. Chat-
+    // saved worded skills (DEC-496) never carry it.
+    function isLockedSkill() {
+      return resource.data.tier == 3
+        && ('codeBacked' in resource.data
+          || !(resource.data.get('prompt', '') is string
+            && resource.data.get('prompt', '').matches('(?s).*[^\\s\\pZ\\x{0B}\\x{FEFF}].*')));
+    }
+
+    function isValidSkillUpdate(uid, docId) {
+      return !isLockedSkill()
+        && isValidSkillShape(uid, docId)
+        && holdsSkillName(uid, docId)
+        && (request.resource.data.name == resource.data.name
+          || releasesStoredSkillName(uid, docId));
+    }
+
+    function isValidSkillDelete(uid, docId) {
+      return !isLockedSkill() && releasesStoredSkillName(uid, docId);
+    }
+
+    // A referee doc: exactly { uid, skillId }, created in the same batch as a
+    // skill (existing after the write) whose name is this doc's id.
+    function isValidSkillNameClaim(uid, name) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['uid', 'skillId'])
+        && d.keys().hasAll(['uid', 'skillId'])
+        && d.uid == uid
+        && isSkillName(name)
+        && isSkillDocId(d.skillId)
+        && existsAfter(skillDocPath(uid, d.skillId))
+        && getAfter(skillDocPath(uid, d.skillId)).data.name == name;
+    }
+
+    // A referee doc may go only once its skill is gone or renamed away.
+    function isReleasableSkillName(uid, name) {
+      return !existsAfter(skillDocPath(uid, resource.data.skillId))
+        || getAfter(skillDocPath(uid, resource.data.skillId)).data.name != name;
+    }
+
+    // F68 / Task 68.7 (S1) — one entry of the owner's model chain at
+    // users/{uid}/modelChain/current (src/llm/model-chain/types.ts
+    // ChainEntryDoc). The chain only ever POINTS at a secret (secretId + a
+    // masked label); the key or token itself lives server-side, written only
+    // by the F68 callable through firebase-admin, in a top-level collection no
+    // rule here matches (DEC-519: anything under users/{uid}/ is owner-readable
+    // through the read rule below). Exact keys, so no key can ride along.
+    function isValidChainEntry(e) {
+      return e is map
+        && e.keys().hasOnly(['id', 'kind', 'label', 'baseUrl', 'model', 'secretId'])
+        && e.keys().hasAll(['id', 'kind'])
+        && e.id is string && e.id.size() > 0 && e.id.size() <= 128
+        && e.kind in ['local', 'byok', 'aide']
+        && (!('label' in e) || (e.label is string && e.label.size() <= 120))
+        && (!('baseUrl' in e) || (e.baseUrl is string && e.baseUrl.size() <= 2048))
+        && (!('model' in e) || (e.model is string && e.model.size() <= 200))
+        && (!('secretId' in e) || (e.secretId is string && e.secretId.size() <= 128));
+    }
+
+    // The chain doc: { uid, entries, aideBackup?, aideIndex? }. Rules can't
+    // loop, so each index is checked explicitly. 6 = MAX_CHAIN_ENTRIES (5, the
+    // daemon's cap) own entries + KaeMe's Claude; tests/integration/f68-model-
+    // chain-rules.emulator.test.ts derives both bounds from the daemon's
+    // constant. aideIndex (IDEA 14, DEC-536) is KaeMe's Claude's slot among the
+    // rows: a whole number from 0 to the entries count (the daemon clamps
+    // anything past the own count to last); the screen deletes it when the slot
+    // is last (tests/integration/f68-aide-index-rules.emulator.test.ts).
+    function isValidChainDoc(uid) {
+      let d = request.resource.data;
+      let n = d.entries.size();
+      return d.keys().hasOnly(['uid', 'entries', 'aideBackup', 'aideIndex'])
+        && d.keys().hasAll(['uid', 'entries'])
+        && d.uid == uid
+        && d.entries is list
+        && n <= 6
+        && (!('aideBackup' in d) || d.aideBackup is bool)
+        && (!('aideIndex' in d) || (d.aideIndex is int && d.aideIndex >= 0 && d.aideIndex <= n))
+        && (n < 1 || isValidChainEntry(d.entries[0]))
+        && (n < 2 || isValidChainEntry(d.entries[1]))
+        && (n < 3 || isValidChainEntry(d.entries[2]))
+        && (n < 4 || isValidChainEntry(d.entries[3]))
+        && (n < 5 || isValidChainEntry(d.entries[4]))
+        && (n < 6 || isValidChainEntry(d.entries[5]));
+    }
+
+    match /users/{uid} {
+      match /{document=**} {
+        allow read: if isVerifiedOwner(uid);
+      }
+
+      match /profile/main {
+        allow create: if isVerifiedOwner(uid) && isValidProfile(uid);
+        allow update: if isVerifiedOwner(uid)
+          && isValidProfile(uid)
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.uid == resource.data.uid;
+      }
+
+      match /notebooks/{notebookId} {
+        allow create: if isVerifiedOwner(uid) && isValidInbox(uid, notebookId);
+      }
+
+      // F64 Slice 2 — a pending web turn request: create only. No update (a
+      // replayed create on the same id is an update, so it's refused too) and
+      // no delete; the daemon writes status + reply through firebase-admin.
+      match /turnRequests/{requestId} {
+        allow create: if isVerifiedOwner(uid)
+          && isClientCreateOnlyCollection('turnRequests')
+          && isValidTurnRequest(uid);
+      }
+
+      // F65c Slice 2 — the browser's per-chat state. Create / update only (a
+      // merge set); never deleted. Not in any sync list: the daemon never
+      // reads it.
+      match /chatPrefs/{notebookId} {
+        allow create, update: if isVerifiedOwner(uid) && isValidChatPrefs(uid, notebookId);
+      }
+
+      // F68 / Task 68.7 (S1) — the owner's model chain, written by the AI
+      // models screen with merge sets (the first one is a merge-create, so it
+      // carries uid — rule 2, like chatPrefs). Only the fixed doc id the
+      // daemon reads. Never deleted; not in any sync list (the daemon reads it
+      // through its own listener).
+      match /modelChain/{docId} {
+        allow create, update: if isVerifiedOwner(uid) && docId == 'current' && isValidChainDoc(uid);
+      }
+
+      // F102 — the skill-name referee. Never client-UPDATED (a second device
+      // can't repoint a claimed name); create / delete only alongside the
+      // skill write that justifies it. Not in isClientWritableCollection.
+      match /skillNames/{name} {
+        allow create: if isVerifiedOwner(uid) && isValidSkillNameClaim(uid, name);
+        allow delete: if isVerifiedOwner(uid) && isReleasableSkillName(uid, name);
+      }
+
+      // Slice 3 — owner writes on every synced collection, at exactly
+      // users/{uid}/<C>/{docId} (no deeper). The Inbox is created only by the
+      // block above and is never deleted.
+      match /{collection}/{docId} {
+        allow create: if isVerifiedOwner(uid)
+          && isClientWritableCollection(collection)
+          && isOwnedSyncDoc(uid)
+          && !(collection == 'notebooks' && docId == 'inbox')
+          && isNotInboxImpostor(collection)
+          && hasValidChildView(collection)
+          && hasValidLastEntryAt(collection)
+          && hasValidEntryContent(collection)
+          && hasValidEditedAt(collection)
+          && (collection != 'skills' || isValidSkillCreate(uid, docId));
+        allow update: if isVerifiedOwner(uid)
+          && isClientWritableCollection(collection)
+          && isOwnedSyncDoc(uid)
+          && keepsInboxIdentity(collection, docId)
+          && hasValidChildView(collection)
+          && hasValidLastEntryAt(collection)
+          && hasValidEntryContent(collection)
+          && hasValidEditedAt(collection)
+          && (isExistingInbox(collection, docId) || isNotInboxImpostor(collection))
+          && (collection != 'skills' || isValidSkillUpdate(uid, docId));
+        // F65a Slice 3: the legacy-id Inbox (stored slug 'inbox') is never
+        // deletable either, not just the fixed id.
+        allow delete: if isVerifiedOwner(uid)
+          && isClientWritableCollection(collection)
+          && !isExistingInbox(collection, docId)
+          && (collection != 'skills' || isValidSkillDelete(uid, docId));
+      }
+    }
+  }
+}
