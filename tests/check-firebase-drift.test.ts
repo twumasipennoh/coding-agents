@@ -24,6 +24,7 @@ import {
 	classifyHttpError,
 	collectionGroupFromName,
 	compareRules,
+	entryPointKind,
 	EXIT,
 	evaluateDrift,
 	formatReport,
@@ -1216,5 +1217,30 @@ describe("parseArgs — --repo", () => {
 
 	it("leaves repo unset when not passed (main falls back to the cwd)", () => {
 		expect(parseArgs(["--project", "staging"]).repo).toBeUndefined();
+	});
+});
+
+describe("entryPointKind — the start-up check never fails open", () => {
+	const self = new URL("../scripts/check-firebase-drift.mjs", import.meta.url).href;
+	const selfPath = new URL(self).pathname;
+	const throwing = () => {
+		throw Object.assign(new Error("loop"), { code: "ELOOP" });
+	};
+
+	it("runs main when argv[1] resolves to this file", () => {
+		expect(entryPointKind(selfPath, self)).toBe("main");
+	});
+
+	it("is an import when argv[1] is another program (vitest)", () => {
+		expect(entryPointKind("/usr/bin/vitest", self, (p: string) => p)).toBe("import");
+		expect(entryPointKind(undefined, self)).toBe("import");
+	});
+
+	it("reports unresolved (caller exits non-zero) when this script's path can't be resolved", () => {
+		expect(entryPointKind("/some/link/check-firebase-drift.mjs", self, throwing)).toBe("unresolved");
+	});
+
+	it("stays an import when an unrelated argv[1] can't be resolved", () => {
+		expect(entryPointKind("/some/other-tool.js", self, throwing)).toBe("import");
 	});
 });

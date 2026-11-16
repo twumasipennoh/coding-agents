@@ -147,6 +147,12 @@ describe("central script checks the project it is pointed at", () => {
 		expect(r.status).toBe(0);
 	});
 
+	it("[Int|E] relative --repo resolves against the cwd, not the script's location", () => {
+		const r = run(["--project", "staging", "--repo", "../project"], { cwd: join(tmp, "home") });
+		expect(r.out).toContain(`(${PROJECT_ID})`);
+		expect(r.status).toBe(0);
+	});
+
 	it("[Int|U] live rules edited in the console → DRIFT, exit 1", () => {
 		const r = run(["--project", "staging", "--repo", project], { live: CONSOLE_EDIT });
 		expect(r.out).toContain("DRIFT DETECTED — refusing to deploy.");

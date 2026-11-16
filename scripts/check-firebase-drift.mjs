@@ -1227,19 +1227,26 @@ export async function main(argv, { git, env = process.env, cwd = process.cwd() }
 // Node realpaths import.meta.url but argv[1] keeps the caller's path, so compare
 // realpaths: a direct compare skips main() (silent exit 0) whenever the script is
 // launched through a symlink, e.g. /home/kwaku -> /home/twumasip (Insem DEC-389).
-function invokedDirectly() {
-	if (!process.argv[1]) return false;
+// Returns "main" (run), "import" (loaded as a module) or "unresolved" (launched
+// as this script but a path couldn't be resolved — the caller must fail closed,
+// never exit 0, since a deploy hook would read that as a pass).
+export function entryPointKind(argv1, moduleUrl, realpath = fs.realpathSync) {
+	if (!argv1) return "import";
+	const self = fileURLToPath(moduleUrl);
 	try {
-		return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
-	} catch (err) {
-		if (err?.code !== "ENOENT") {
-			console.error(`check-firebase-drift: couldn't resolve ${process.argv[1]} (${err?.code || err}) — main() skipped`);
-		}
-		return false;
+		return realpath(argv1) === realpath(self) ? "main" : "import";
+	} catch {
+		return path.basename(argv1) === path.basename(self) ? "unresolved" : "import";
 	}
 }
 
-if (invokedDirectly()) {
+const entry = entryPointKind(process.argv[1], import.meta.url);
+if (entry === "unresolved") {
+	console.error(`\ncheck-firebase-drift FAILED: couldn't resolve ${process.argv[1]} to decide whether to run`);
+	process.exit(EXIT.USAGE);
+}
+
+if (entry === "main") {
 	main(process.argv.slice(2))
 		.then((code) => process.exit(code))
 		.catch((err) => {

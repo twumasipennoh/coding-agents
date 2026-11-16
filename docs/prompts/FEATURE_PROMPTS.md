@@ -51,19 +51,21 @@
 - [x] Entry guard realpaths both sides (S2).
 - [x] Tests (red against KaeMe's original, green after; the guard test also red with only the guard reverted).
 
-## Task 1.2 — Repoint KaeMe (S8)
-- [ ] `check:drift:*` npm scripts call `../coding-agents/scripts/check-firebase-drift.mjs --repo .`; delete KaeMe's copy and its moved unit test.
-- [ ] Update KaeMe's f63 wiring test to run the central script, and add a case: `coding-agents` checkout missing → `npm run deploy:rules:dev` fails and the stub `firebase` never runs.
+## Task 1.2 — Repoint KaeMe (S8) ✅
+- [x] `check:drift:*` npm scripts call `node "$HOME/projects/coding-agents/scripts/check-firebase-drift.mjs" --repo .` (absolute via `$HOME`, so the f63 test can point a temp HOME at the real checkout); KaeMe's copy and its moved unit test deleted.
+- [x] f63 wiring test runs the central script; new case: checkout missing → hook fails, stub `firebase deploy` never runs. f65a / f65 import the central copy via `tests/helpers/central-drift-gate.ts`.
+- Merge order: this repo's PR first — KaeMe's hooks need the re-rooted script.
 
-## Task 1.3 — /deploy step (S1, S7)
-- [ ] In `~/.claude/skills/deploy/SKILL.md` Step 3 (`kind: "firebase"`), when `services` includes `firestore`, run the check with the target env's alias and `--repo <project root>`; any non-zero exit fails Pre-Deploy Checks with the script's first failure line.
-- [ ] Central script missing → stop with "drift gate unavailable: clone coding-agents to ~/projects/coding-agents".
-- [ ] HabitTracker's and MediaTracker's `deploy.ps1` calls stay as-is (Windows path; no Linux call exists to remove).
+## Task 1.3 — /deploy step (S1, S7) ✅ (global skill; vendored copies pending)
+- [x] `~/.claude/skills/deploy/SKILL.md` Step 3 item 2b: runs when `services` includes `firestore`, with the target alias and `--repo "$(pwd)"`; any non-zero exit fails Pre-Deploy Checks with the first `FAILED:` / `DRIFT DETECTED` line.
+- [x] Central script missing → stop with "drift gate unavailable".
+- [x] HabitTracker's and MediaTracker's `deploy.ps1` calls left as-is (Windows path; no Linux call existed).
+- [ ] Vendor the updated skill into HabitTracker, MediaTracker, PlaylistModifier_v2 `.claude/skills/deploy/` (project copies are what sessions load). Not done via `sync-skills.sh`: it would also push ~49 unrelated skill drifts into 11 repos.
 
-## Task 1.4 — Audit, then block
-- [ ] Run the check read-only against all five projects; record each exit + summary.
-- [ ] Reconcile each drift (pull console changes into the repo's `firestore.indexes.json` / `firestore.rules`, PR per project). Re-run until every project exits 0 (PlaylistModifier: exit 3 until its key exists).
-- [ ] Only then land Task 1.3's blocking step.
+## Task 1.4 — Audit, then block ✅ (one prerequisite open)
+- [x] Read-only audit 2026-11-16 (logs `/tmp/drift-audit-<project>-<alias>.log`): HabitTracker staging + default, MediaTracker dev + prod → exit 0, no drift (rules match; indexes 5/5 and 8/8; field overrides 4/4 and 0/0). PlaylistModifier → exit 3, key `~/.gcp/playlist-modifier.json` missing.
+- [x] Nothing to reconcile, so the blocking step landed.
+- [ ] PlaylistModifier: kwaku generates its key, then re-run its audit line.
 
 ## Tests to Write First (scenario summary)
 **Compare (S6)**
