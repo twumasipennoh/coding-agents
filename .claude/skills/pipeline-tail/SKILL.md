@@ -94,10 +94,10 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` before launching the
 
 **Phase A — Parallel static analysis (all read-only):**
 - **pattern-enforcer** — run as a fresh `general-purpose` subagent, never by the session that wrote the diff: its prompt is the `~/.claude/references/goldfish-judge.md` §5 template with the checklist spec `~/.claude/agents/pattern-enforcer.md` + `.claude/patterns.md`, the `check-wiring.sh` JSON as evidence, and the artifact `git diff <base>...HEAD`. Checks codebase conventions + consumes `check-wiring.sh` output for semantic escalation. BLOCKING on VIOLATIONS, a `MUST` line, or `SCORE` below `GOLDFISH_PASS_SCORE` (auto-fix only the `MUST` lines; `POLISH` lines go in the PR body) (apply the tree guard and judge-unavailable rules from `auto-phase-protocol.md` §2). Do its writes for it: append any `RULE-CANDIDATE:` lines from its `OPEN:` block to `~/.claude/state/wiring-rules/review-queue.jsonl`, and run `~/.claude/scripts/log-rule-hit.sh <family> <entry-slug> pattern-enforcer` for each `RULE-HIT:` line. A `VERDICT: REFUSED` (no `.claude/patterns.md`) blocks as before.
-- **security-reviewer** — static security analysis. BLOCKING on CRITICAL.
+- **security-reviewer** — static security analysis. BLOCKING: CRITICAL, HIGH and MEDIUM findings block and get auto-fixed, at most `PHASE_AUDIT_RETRY_BOUND` rounds (DEC-287). LOW is never a gate failure, is not fixed in the loop, and goes in the PR body under `## Security notes`, with any MEDIUM still open after the last round. The reviewer reruns only after a CRITICAL, HIGH or MEDIUM fix, and never on a gate that already passed. Levels are the ones in `.claude/agents/security-reviewer.md` (a fresh reviewer always finds new LOWs, so rerunning for them never converges, DEC-271). Chini's own review blocks the PR card's Merge on an open MEDIUM-or-higher finding until it's fixed or the owner waives it.
 - **test-gap-auditor** — audits test coverage for blind spots (Mode C: Implementation Audit). Runs the mandatory three-section checklist (scenario coverage, layer coverage, wiring coverage) against the implementation diff and test files. BLOCKING on GAP findings — gaps trigger the auto-fix retry loop (write missing tests, re-run auditor). NOT user-blocking — the pipeline self-heals.
 - **monitoring-spec-validator** — validates monitoring_spec.md. Reports DEFERRED if no spec exists.
-- **frontend-design-reviewer** — CONDITIONAL: only if `~/.claude/scripts/needs-design-review.sh` exits 0. BLOCKING on CRITICAL. If exit 2 (no `ui-paths.txt`), report SKIPPED.
+- **frontend-design-reviewer** — CONDITIONAL: only if `~/.claude/scripts/needs-design-review.sh` exits 0. BLOCKING: only CRITICAL and HIGH findings block and get auto-fixed, at most `PHASE_AUDIT_RETRY_BOUND` rounds. MEDIUM and LOW are never a gate failure, are not fixed in the loop, and go in the PR body under `## Design notes`. The reviewer reruns only after a CRITICAL or HIGH fix, and never on a gate that already passed. On a CRITICAL / WARNING / INFO scale, WARNING and INFO count as MEDIUM and LOW. If exit 2 (no `ui-paths.txt`), report SKIPPED.
 
 **Phase B — Sequential test gates (with shared test environment):**
 
@@ -110,8 +110,10 @@ suite and acceptance-tester), mark the checkpoint `pending` before starting and 
 the underlying suite command under `~/.claude/scripts/longrun-tick.sh` (per Step 0)
 so it survives the turn ending and reports DONE independently. Mark `pass`/`fail`
 on the checkpoint when the verdict lands:
-- **test-runner** — full test suite across all layers. BLOCKING. Emulators are already running; test-runner's Pre-Test Setup should verify (check) but not re-start.
-  - **Save results for reuse.** Right before test-runner's final attempt, compute `KEY=$(~/.claude/scripts/test-result-cache.sh key)`. When it passes, recompute the key. If it's unchanged, save every layer that ran to completion: `~/.claude/scripts/test-result-cache.sh save "$KEY" "<layer>" --failing-json '<its PRE-EXISTING failures as a JSON array, [] when green>'` (exit 3 = never reusable, skip it). Write each failing test as `<file path from the repo root> > <full test title, describe blocks included>`, the same format the baseline uses. If the key changed mid-run (an auto-fix landed), save nothing. After a rebased squash merge, main gets this same key, so the next baseline reuses these results.
+- **test-runner** — full test suite across all layers of the change's scope. BLOCKING. Emulators are already running; test-runner's Pre-Test Setup should verify (check) but not re-start.
+  - **Layers by scope.** When `.claude/test-commands.md` has a `## Scopes` section and the repo has `scripts/test-scope.mjs`, pick the layers from the real diff: `node scripts/test-scope.mjs layers` (base `origin/main`; a `--base` only adds paths, it never narrows the scope). Hand test-runner only the layers it prints, in place of every `## Layers` layer, and name the rest as skipped in the GATES line (e.g. `test-runner ✓ (web scope: web, web-e2e, web-e2e-emulator; skipped unit, e2e, acceptance, real-claude)`). A `full` scope is every layer, as before. If the baseline's `scope` is smaller than the diff's (the change grew past `apps/web/`), the extra layers have no baseline, so any failure in them goes to the lead as new, never as pre-existing. With no `## Scopes` section, run every layer.
+  - **Skip a composite whose parts already passed.** Before a composite layer from `## Scopes` (KaeMe's `all` = `test:all` = `unit` `slow` `e2e` `acceptance`), run `node scripts/test-scope.mjs skip-composite all --key "$(~/.claude/scripts/test-result-cache.sh key)" --passed "<layers that passed in this attempt, on this same key>"`. Exit 0 means each part already passed on this tree (this attempt, or a saved green receipt): skip it and say so in the GATES line. Exit 1 prints what has no green result: run it. Never count a layer that passed before an auto-fix changed the key.
+  - **Save results for reuse.** Right before test-runner's final attempt, compute `KEY=$(~/.claude/scripts/test-result-cache.sh key)`. When it passes, recompute the key. If it's unchanged, save every layer that ran to completion (a scope-skipped layer didn't run and is never saved; a composite skipped by `skip-composite` isn't saved either): `~/.claude/scripts/test-result-cache.sh save "$KEY" "<layer>" --failing-json '<its PRE-EXISTING failures as a JSON array, [] when green>'` (exit 3 = never reusable, skip it). Write each failing test as `<file path from the repo root> > <full test title, describe blocks included>`, the same format the baseline uses. If the key changed mid-run (an auto-fix landed), save nothing. After a rebased squash merge, main gets this same key, so the next baseline reuses these results.
 - **acceptance-tester** — invoke as a full-tool agent (`subagent_type: claude`). BLOCKING if scenarios can't reach `Then` clause. Reports DEFERRED only if sidecar was auto-scaffolded (missing `.claude/acceptance-config.md`). Reports SKIPPED if `.claude/no-acceptance` present. Emulators are already running; Pre-Run Setup checks should find state = `ours` and reuse.
 - **Graduation** — a Bash step, not an LLM agent (DEC-352/353/353). Runs right after acceptance-tester has stamped the registry and **while acceptance infra is still up** (the generator's browser drives the same Vite dev server on :5173; teardown below must not run first). Announce `pipeline-step.sh start <pipeline-id> "Graduation"`, then run as a blocking Bash call in this turn (max tool timeout; never detached):
   `node ~/.claude/scripts/scenario-graduation/graduate-scenarios.js --repo "$(pwd)" --pipeline-id <pipeline-id> --generator agent`
@@ -123,7 +125,7 @@ on the checkpoint when the verdict lands:
 After Phase B completes (success or failure):
 - **Test Environment Teardown** — run `~/.claude/scripts/acceptance-infra.sh stop $(pwd)` via Bash. Always runs (success or failure). Announce via `pipeline-step.sh start/done`. Do NOT skip on failure — cleanup must happen.
 
-**Auto-fix retry loop:**
+**Auto-fix retry loop:** security-reviewer "reports failure" with a CRITICAL, HIGH or MEDIUM finding (DEC-287); frontend-design-reviewer only with a CRITICAL or HIGH one. A security gate that reported only LOW findings, or a design gate with only MEDIUM or LOW, passed and never enters this loop; those findings go to the PR body (`## Security notes` / `## Design notes`).
 ```
 for each gate that reported failure:
   attempt = 0
@@ -299,6 +301,12 @@ This step is non-blocking — if memory-review has no recommendations, note "no 
 
 ## Gates
 <GATES completion log — same format as Step 6 output>
+
+## Security notes
+<security-reviewer LOW findings, and any MEDIUM still open after the last fix round (it blocks the Merge until fixed or waived), one line each with file:line; describe, don't quote values from the code or logs (no secret or chat id in a PR body); omit the section when there are none>
+
+## Design notes
+<frontend-design-reviewer MEDIUM and LOW findings, one line each with file:line, described without quoting values; omit when none or the gate was SKIPPED>
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 ```
