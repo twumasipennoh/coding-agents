@@ -116,6 +116,28 @@ aeq  "boundary → HEAD unchanged" "$(cd "$app" && git symbolic-ref --short HEAD
 r="$(run "$app" --data-ack staging "$A")"; rc=$?
 aeq  "boundary + --data-ack → exit 0" "$rc" "0"
 ahas "boundary + --data-ack → deploy ran" "$r" "FIREBASE-DEPLOY"
+# --rules-ack covers firestore.rules only: indexes still block
+r="$(run "$app" --rules-ack staging "$A")"; rc=$?
+aeq  "indexes boundary + --rules-ack → exit 6" "$rc" "6"
+aabs "indexes boundary + --rules-ack → deploy never ran" "$r" "FIREBASE-DEPLOY"
+
+# ── --rules-ack: a rules-only span goes through, rules + migration doesn't ────
+app="$(mkapp)"; C="$(sha_of "$app" HEAD)"
+( cd "$app" && echo 'rules v2' > firestore.rules && git add -A && git commit -qm D ) >/dev/null 2>&1
+r="$(run "$app" staging "$C")"; aeq "rules-only boundary → exit 6" "$?" "6"
+r="$(run "$app" --rules-ack staging "$C")"; rc=$?
+aeq  "rules-only + --rules-ack → exit 0" "$rc" "0"
+ahas "rules-only + --rules-ack → deploy ran" "$r" "FIREBASE-DEPLOY"
+( cd "$app" && mkdir -p scripts/migrations && echo m > scripts/migrations/001.js && git add -A && git commit -qm E ) >/dev/null 2>&1
+r="$(run "$app" --rules-ack staging "$C")"; rc=$?
+aeq  "rules + migration + --rules-ack → exit 6" "$rc" "6"
+ahas "rules + migration + --rules-ack → names the migration" "$r" "scripts/migrations/001.js"
+aabs "rules + migration + --rules-ack → deploy never ran" "$r" "FIREBASE-DEPLOY"
+app="$(mkapp)"; C="$(sha_of "$app" HEAD)"
+( cd "$app" && echo 'rules v2' > firestore.rules && echo '{"indexes":[1]}' > firestore.indexes.json && git add -A && git commit -qm D ) >/dev/null 2>&1
+r="$(run "$app" --rules-ack staging "$C")"; rc=$?
+aeq  "rules + indexes + --rules-ack → exit 6" "$rc" "6"
+aabs "rules + indexes + --rules-ack → deploy never ran" "$r" "FIREBASE-DEPLOY"
 
 # ── prod confirm guard ───────────────────────────────────────────────────────
 app="$(mkapp)"; B="$(sha_of "$app" HEAD~1)"
@@ -237,6 +259,13 @@ aeq  "delegate → restored to main" "$(cd "$app" && git symbolic-ref --short HE
 r="$(run "$app" --dry-run staging "$B")"
 ahas "delegate dry-run → method" "$r" "method=delegate"
 ahas "delegate dry-run → deploy line" "$r" "deploy: echo DELEGATE-RAN staging"
+# delegate + --rules-ack: a rules-only span runs the deployCommands (they ship the rules with the code)
+app="$(mkdelegate)"; B="$(sha_of "$app" HEAD)"
+( cd "$app" && echo 'rules v2' > firestore.rules && git add -A && git commit -qm C ) >/dev/null 2>&1
+r="$(run "$app" staging "$B")"; aeq "delegate rules-only → exit 6" "$?" "6"
+r="$(run "$app" --rules-ack staging "$B")"; rc=$?
+aeq  "delegate rules-only + --rules-ack → exit 0" "$rc" "0"
+ahas "delegate rules-only + --rules-ack → runs deployCommands" "$r" "DELEGATE-RAN staging"
 # delegate failure propagates + restores branch
 app="$(mkdelegate)"; B="$(sha_of "$app" HEAD~1)"
 ( cd "$app" && printf '%s' '{"platform":"firebase","environments":{"staging":{"projectId":"del","nonprod":true}},"deployCommands":{"staging":["exit 4"]}}' > .claude/deploy.json && git commit -qam patch ) >/dev/null 2>&1

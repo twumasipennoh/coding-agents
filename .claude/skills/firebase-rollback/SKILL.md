@@ -22,7 +22,9 @@ possibly-buggy build), then restores your branch.
 Firestore **rules/indexes/data are NOT rolled back** by default; if the rollback
 span crossed a schema/data-shaping file the script BLOCKS until you pass
 `--data-ack` (guards the CONFIG-AS-CODE DRIFT failure — an older `indexes.json`
-redeploy silently deletes newer indexes).
+redeploy silently deletes newer indexes). `--rules-ack` passes a span whose only
+boundary file is `firestore.rules` (for a delegate deploy that ships rules with the
+code, e.g. Insem's `scripts/deploy.sh`); indexes and migrations still block.
 
 Requires the project's `.claude/deploy.json` (already present in every Firebase
 app — same sidecar `/deploy` reads). No new config to author.
@@ -40,6 +42,7 @@ scripts/firebase-rollback.sh [options] <env> <sha|last-good>
   --stash            stash a dirty tree before checkout
   --with-firestore   include firestore rules+indexes in the deploy (default: excluded)
   --data-ack         acknowledge a crossed schema/data boundary
+  --rules-ack        acknowledge a firestore.rules-only boundary (indexes/migrations still block)
   --confirm <TOKEN>  required for a prod env (TOKEN = the projectId)
   --run-tests        run testCommands before deploy (default: skip)
   --dry-run          print the resolved checkout/build/deploy commands, run nothing
@@ -60,7 +63,7 @@ scripts/firebase-rollback.sh [options] <env> <sha|last-good>
 (hold the turn — never detach under `claude -p`):
 
 ```bash
-scripts/firebase-rollback.sh [--stash] [--with-firestore] [--data-ack] \
+scripts/firebase-rollback.sh [--stash] [--with-firestore] [--data-ack] [--rules-ack] \
   [--confirm <projectId>] <env> <target>
 ```
 
