@@ -24,6 +24,8 @@
 #                       ignored in delegate mode, where deployCommands set scope)
 #   --data-ack         acknowledge a schema/data boundary was crossed; required
 #                      to proceed when the span touches rules/indexes/migrations
+#   --rules-ack        acknowledge a span whose only boundary file is
+#                      firestore.rules (indexes and migrations still block)
 #   --confirm <TOKEN>  required for a prod env; TOKEN must equal the projectId
 #   --run-tests        run deploy.json testCommands before deploy (assemble mode)
 #   --dry-run          resolve + print the checkout/build/deploy commands, run nothing
@@ -55,6 +57,7 @@ options:
   --stash            stash a dirty tree before checkout
   --with-firestore   include firestore rules+indexes in the deploy (default: excluded)
   --data-ack         acknowledge a crossed schema/data boundary
+  --rules-ack        acknowledge a firestore.rules-only boundary (indexes/migrations still block)
   --confirm <TOKEN>  required for prod (TOKEN must equal the projectId)
   --run-tests        run testCommands before deploy (default: skip)
   --dry-run          print the resolved commands, run nothing
@@ -62,7 +65,7 @@ EOF
 }
 
 # ── arg parse ────────────────────────────────────────────────────────────────
-STASH=0; WITH_FS=0; DATA_ACK=0; RUN_TESTS=0; DRY=0; CONFIRM=""
+STASH=0; WITH_FS=0; DATA_ACK=0; RULES_ACK=0; RUN_TESTS=0; DRY=0; CONFIRM=""
 ENV_KEY=""; TARGET=""
 positional=()
 while (($#)); do
@@ -70,6 +73,7 @@ while (($#)); do
 		--stash) STASH=1 ;;
 		--with-firestore) WITH_FS=1 ;;
 		--data-ack) DATA_ACK=1 ;;
+		--rules-ack) RULES_ACK=1 ;;
 		--run-tests) RUN_TESTS=1 ;;
 		--dry-run) DRY=1 ;;
 		--confirm) shift; [[ $# -gt 0 ]] || { usage; exit 2; }; CONFIRM="$1" ;;
@@ -213,6 +217,9 @@ if (( DRY )); then
 fi
 
 # ── data-boundary block ──────────────────────────────────────────────────────
+# --rules-ack lets a firestore.rules-only span through: rules go back with the code
+# when the deploy covers them, and no data or index is lost. Anything else still blocks.
+if [[ "$RULES_ACK" == "1" && "$BOUNDARY_FILES" == "firestore.rules" ]]; then DATA_ACK=1; fi
 if [[ -n "$BOUNDARY_FILES" && "$DATA_ACK" != "1" ]]; then
 	say "DATA BOUNDARY: rolling $TARGET_SHORT..HEAD crosses schema/data-shaping files:"
 	while IFS= read -r f; do [[ -n "$f" ]] && say "    $f"; done <<< "$BOUNDARY_FILES"
