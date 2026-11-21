@@ -139,6 +139,13 @@ A markdown file with H2 sections. Required sections marked **(required)**.
 - `shadow_agree_threshold`: how many pipelines the shadow spec (both `shadow` and `shadow-iphone` projects) and the ephemeral scenario must pass together before the spec retires into `playwright_target_dir` and the row becomes `status: graduated` (default = `pass_streak_threshold`). Any disagreement resets the count and never blocks the feature.
 - `generator_config`: the Playwright config the generator's MCP server runs under (e.g., `playwright.graduation.config.ts` — no `webServer`, no `globalSetup`, `baseURL` pointed at the acceptance infra's dev server; DEC-355).
 
+Layout keys (optional). Each default is the Insem layout, so a project shaped like Insem sets none of them. Every path is repo-relative and must resolve inside the repo, or the Graduation step exits 1 before writing anything.
+- `playwright_cwd`: the directory where `npx playwright test --list` runs, which is also where the Playwright config lives (default `.`). For example, HabitTracker sets `apps/web`. `--list` prints paths relative to that config's `testDir`. The collection check matches them as a suffix of the repo-relative spec path.
+- `shadow_helper`: a comma list of the modules a shadow spec imports `test` / `expect` from. Paths are repo-relative, with no extension (default `tests/helpers/shadow-test, tests/graduated/helpers/shadow-test`).
+- `helper_allowlist`: a comma list of the other project test helpers a shadow spec may import, or `none` (default `tests/helpers/youtube-player-stub, tests/helpers/tap-chrome, tests/helpers/console-errors`). List only browser-side helpers. A helper that wipes the emulator or makes Node-side HTTP calls must stay off this list.
+- `spec_path_root`: the directory that every file-path literal in a shadow spec must stay under. That covers `setInputFiles`, `screenshot({ path })`, `addInitScript({ path })` and similar (default `tests`). A literal is resolved from `playwright_cwd`, because that is where Playwright resolves it at run time.
+- `helper_import`: the exact import line the generator is told to put first and the stub generator writes (default `import { test, expect } from "../helpers/shadow-test";`). Its module is resolved from `shadow_dir` and must land on one of `shadow_helper`. Otherwise every generated spec would be rejected, so the step refuses to start.
+
 ## Pre-Run Setup (optional)
 For each dependency the running app needs (db, queues, the app itself), define:
 - `name`: short label
@@ -233,7 +240,14 @@ For each dependency `D` with check `C` and start `S`:
      <source_fingerprint.lookup_command>   # prints an absolute path, or MISS
      ```
 
-     On a HIT, reuse that file (skip generation LLM cost). On MISS, call the LLM to generate, then store it under the filename the tool names (`<scenario-id>.<key><file_extension>`). Do not hand-roll the hash, and do not reuse a file the tool did not name.
+     The cache is ONE shared folder per repo, `<main checkout>/.claude/.acceptance-cache/`, managed by `~/.claude/scripts/acceptance-cache.sh` (`dir`, `key`, `restore`, `latest`, `store`, `prune`). Generated specs are gitignored, so a run in a fresh worktree (a Chini deploy run, a Build worker, a `/fix` worktree) must read this folder, never its own `.claude/.acceptance-cache/` — on 2026-10-27 a deploy worktree started empty and rewrote all 216 of Insem's specs. A sidecar `lookup_command` must resolve against the same shared folder. When the sidecar declares no `lookup_command`, the key is `acceptance-cache.sh key --text-file <scenario text> --fingerprint <fingerprint>` and the lookup is `acceptance-cache.sh restore <scenario-id> <key> <Ephemeral Tests.location>`.
+
+     The lookup answers one of three ways:
+     - **HIT `<path>`** — reuse that file (skip generation LLM cost).
+     - **VERIFY `<path>`** (only from a sidecar `lookup_command` that tracks cited files, e.g. Insem's) — the source changed, but the scenario text is the same and none of the files this spec was grounded against changed. Reuse it, run it, and keep it only if it **passes with at least one assertion executed**. Then stamp its header `* Re-verified by run (source fingerprint <fp>, <YYYY-MM-DD>; cited files unchanged)` and store it under the current key. If it fails, or passes without asserting anything, treat it as a MISS and regenerate it, using it as the draft.
+     - **MISS** — generate. If `acceptance-cache.sh latest <scenario-id>` names an older entry, use it as the draft and re-ground against current source (step 4b); never run a MISS draft as-is.
+
+     After generating (or re-verifying) a spec, store it with `acceptance-cache.sh store <spec> <scenario-id> <key>` (or the sidecar's store step), which names it `<scenario-id>.<key><file_extension>`, writes a temp file and renames it into place, and never replaces another key's entry. Do not hand-roll the hash, and do not reuse a file the lookup did not name.
    - Write to `<Ephemeral Tests.location>/<scenario-id><file_extension>`.
 8. **Run in parallel.** Use `runner_command` to execute the ephemeral dir, but cap concurrency at `max_parallel`. Monitor cumulative LLM cost during execution (browser-use exposes per-action token usage); abort hard if total crosses `max_cost_usd`.
 
@@ -251,7 +265,7 @@ For each dependency `D` with check `C` and start `S`:
       Why that check is blocking there: graduation permanently SKIPS the ephemeral scenario on the grounds that a Playwright spec covers it. If that spec is never collected, the scenario is skipped by you AND ignored by the runner — zero coverage behind a green registry entry, which is undetectable downstream because a coverage gate correctly treats `graduated` as exempt. As of 2026-09-06 two of three configured projects had a target the runner could not see (Insem's was inside a `**/acceptance/**` ignore glob; HabitTracker's was outside `testDir`), and neither was noticed because no graduation had ever taken this path — every historical one instead pointed `playwright_path` at a pre-existing committed spec. A two-second `--list` grep is the difference between a real handoff and a silent hole.
     - FAIL on a `status: pending-demotion` entry: confirm the demotion — set `status: demoted`, reset `pass_streak: 0`.
     - FAIL otherwise: reset `pass_streak: 0`.
-11. **Post-run cleanup.** Run any `## Post-Run Cleanup` blocks. Always runs — on success or failure.
+11. **Post-run cleanup.** Run any `## Post-Run Cleanup` blocks. Always runs — on success or failure. Then prune the shared cache: write every scenario id read in step 3 (graduated and skipped ones included) to a temp file and run `acceptance-cache.sh prune --keep 2 --ids-file <that file>` — the newest 2 entries per scenario stay, scenarios that no longer exist go.
 12. **Report.** Emit the Output Format below. Exit non-zero if any scenario FAILED or any LEAKED ACCOUNT was logged. Exit zero only if all included scenarios passed and no leaks.
 
 ## Tag semantics
@@ -353,7 +367,7 @@ the current generation batch references the same fixture name.
 
 Note that step 4b's own prose said the right thing and the run was still wrong. That is the lesson: **a prose instruction to re-ground is not a mechanism**, because the reuse path never reaches the instruction. Putting source in the key means there is no stale entry to hit in the first place.
 
-**The deliberate trade.** This largely invalidates the cache whenever product code changes. That is correct, not a regression. The cache exists to skip LLM cost when nothing relevant changed — and if source changed, the spec *must* be re-grounded, which means regenerating it. What survives is the case the cache is actually for: repeated runs at the same source state (a retry after a flake, a re-run after fixing a scenario's markdown, a second pipeline pass that touched only docs or tests).
+**The trade, and how it was narrowed (2026-10-30).** A source-in-the-key cache invalidates every entry whenever product code changes. Regenerating everything turned out to be the expensive and noisy path: Insem's 2026-10-27 deploy rewrote all 216 specs and 54 failed, mostly faults in the freshly written specs, not the app. So a key miss is no longer automatically a rewrite. A project whose lookup tracks the files each spec was grounded against answers VERIFY when only *other* files changed: the old spec is rerun and kept only if it passes with assertions executed. The 09-08 lesson still holds where it matters: a stale spec never *fails* its way into a deploy block, because a failing reused spec is regenerated before its result counts, and a spec whose cited files changed is always re-grounded. Projects without file tracking keep the full invalidation, softened by using the newest older entry as the draft.
 
 **Where the command comes from.** The fingerprint is project-specific, so it lives in the sidecar under `## Source Fingerprint`. If the sidecar declares one, use it. If the sidecar does NOT declare one, fall back to this portable default, computed once per run:
 
@@ -372,7 +386,7 @@ Two properties the fingerprint must have, whichever command produces it:
 
 ## Cost discipline
 
-- Cache generated scripts under `<cwd>/.claude/.acceptance-cache/`, keyed on scenario text **plus the source fingerprint** (see above). Re-use across pipeline runs when neither the scenario nor the source has changed.
+- Cache generated scripts in the shared `<main checkout>/.claude/.acceptance-cache/` (`acceptance-cache.sh dir`), keyed on scenario text **plus the source fingerprint** (see above). Re-use across pipeline runs and worktrees when neither the scenario nor the source has changed, re-verify on VERIFY, and prune to the newest 2 per scenario after each run.
 - During execution, sample per-action LLM cost. If projected total exceeds `max_cost_usd`, abort with a partial report ("Token budget exceeded — aborted at scenario X/Y, $Z.ZZ spent").
 - Default `max_cost_usd` if sidecar omits it: `5.00`.
 
