@@ -263,6 +263,26 @@ If present:
 5. This dispatches a **TestFlight** build — it does NOT release to the public App Store. For `prod`, the public release stays a manual "Submit for Review" + release in App Store Connect (unless `ios.autoSubmit` is `true`, which the workflow would handle separately).
 6. `pipeline-step.sh done deploy "iOS Build" --note "<ios-env> dispatched: <run-url>"`. **Non-blocking:** the web deploy already succeeded, so a dispatch failure is a WARNING in the summary, not a pipeline failure.
 
+### Step 4c — Phone check (conditional)
+
+Runs when the deploy succeeded and has a deployed URL (every `kind: "firebase"` deploy;
+`local-script` only when it has a public URL), unless `deploy.json` sets
+`"phoneVerify": false`. It opens the deployed PWA in Chrome on the real test phone
+(the Android phone plugged into the desktop) and checks that it loads cleanly. Setup
+and behaviour: `~/.claude/references/phone-verify.md`.
+
+1. **Announce:** `pipeline-step.sh start deploy "Phone Check"`.
+2. **Run (blocking, same turn):**
+   `~/.claude/scripts/phone-verify.sh --wait 600 "$(pwd)" "<deployed-url>?v=<short-hash>"`
+   Its last line is `[PHONE-VERIFY pass|fail|skipped|error] <reason>`.
+3. **Close the step by exit code:** `0` → `done … --note "passed on the phone"`; `4` →
+   `skip deploy "Phone Check" "<reason>"` (no phone on this machine, e.g. after a
+   failover to the laptop); `1` / `3` / `75` → `fail deploy "Phone Check" "<reason>"`.
+4. **Non-blocking:** the deploy already shipped, so a phone failure is a WARNING line
+   at the top of the final summary (with the reason and screenshot path), not a
+   pipeline failure, and never a rollback. The script itself already sent the
+   screenshot to Telegram on a failure.
+
 ### Step 5 — Log
 
 **Announce step:** `~/.claude/scripts/pipeline-step.sh start deploy "Log" --index 3`
@@ -427,6 +447,9 @@ Example output shape (a deploy that changed the feed ranker + fixed a save bug):
     "nonprod": ["npm -w apps/web run build:staging"],
     "prod": ["npm -w apps/web run build:prod"]
   },
+
+  // Optional: false skips the Step 4c phone check (default: run it)
+  "phoneVerify": true,
 
   // Optional: env files to verify per target
   "envFiles": {

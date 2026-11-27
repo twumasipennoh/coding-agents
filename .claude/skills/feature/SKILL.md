@@ -100,6 +100,10 @@ Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` against the current 
 
 **Post-write wiring re-check:** Run `~/.claude/scripts/check-wiring.sh --json PROJECT_ROOT` again. Compare findings to the pre-implementation baseline from Step 2b. Any NEW findings (not in baseline) are regressions introduced by this implementation — fix them before proceeding to Step 4.
 
+**Wiring fix loop cap.** The fix-and-re-check loop stops after `PHASE_AUDIT_RETRY_BOUND` attempts (declared once in `~/.claude/references/auto-phase-protocol.md` §2: read it there, never restate it). At the bound, stop and report each finding still open plus what each attempt changed; don't delete or weaken the flagged item (a spec edited to match the code is listed for review below). A NEW `tla:<spec>:<cfg>:<Name>` finding is a TLC counterexample: hand its trace path to test-creator (`### TLC Counterexample Tests`) for a failing regression test before fixing the code. Violations held in that spec's `known.json` are pre-existing and report-only.
+
+**Spec edits.** At report time (in `/pipeline-tail`'s PR body when this skill hands off to it), run `~/.claude/scripts/tla/tlc-check.sh --changed-specs PROJECT_ROOT` and list each `tla-spec-changed:<spec>` line under **spec changed — review** with the diff command it prints; nothing printed → leave the heading out. Layout and conventions: `~/.claude/references/tla-specs.md`.
+
 **Proactive rule generation:** If during the trace you identify a seam type not covered by existing known-failures or script rules, emit a candidate to `~/.claude/state/wiring-rules/review-queue.jsonl`.
 
 **Tracer slice (BLOCKING when the entry has a non-`none` `Tracer Path:`):** before any real logic, connect the whole path first.

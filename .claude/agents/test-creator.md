@@ -171,12 +171,37 @@ If the invoking skill (requirements-clarifier or feature pipeline) provides a **
 
 **Proactive rule generation:** If while writing wiring tests you identify a seam pattern not covered by existing known-failures rules or `check-wiring.sh` script rules, emit a candidate rule. Append to `~/.claude/state/wiring-rules/review-queue.jsonl` in JSON format: `{"source_skill":"test-creator","domain_tag":"...","rule_type":"grep|semgrep|ast-grep","pattern":"...","description":"...","timestamp":"ISO"}`.
 
+### TLC Counterexample Tests
+
+When the invoking skill hands you a NEW `tla:<spec>:<cfg>:<Name>` finding from `check-wiring.sh --json` (TLC found a violation of `<Name>` in that spec's `<cfg>`), its message ends in `trace: <path>`: TLC's counterexample, a numbered list of states. Turn that exact sequence of steps into a regression test against the real code, not against the spec. Layout and conventions: `~/.claude/references/tla-specs.md`.
+
+- Read the trace state by state; map each spec action to the code step it models via the spec's `@models file:line "text"` citations next to that action.
+- Replay it through the code's own seam, the one the spec's code already exposes:
+  - failover (`failover/spec/`): the `failover/test/harness.mjs` FakeClock world (`createWorld()`: power and link changes as they happen, `world.run(<spec unit>)` per spec step), asserting the harness invariants (`world.violations`). `failover/test/tlc-replay.test.mjs` is the worked example.
+  - aide daemon start (conversational-assistant `src/daemon/spec/`): `runBackgroundDaemonStart` with the `processKill` and `procRoot` seams (and `spawn`, `clock`, `sleep`) scripted to the trace's order.
+  - test slot (`scripts/spec/`): real `with-test-slot.sh` processes under a private `TEST_SLOT_DIR`, real `flock`, real kills ([shell-fixture]: never a stubbed lock).
+  - atomic write (`lib/focus/spec/`): real processes racing real `renameSync` calls on one file in a temp dir (real `rename`, never a mocked fs).
+  - a new async-JS spec: the fast-check scheduler, ordering the awaited steps as the trace does.
+- The test must fail on the code TLC flagged, for the reason the trace shows (assert the invariant, not a side detail), and pass once it's fixed. Name it after the spec and cfg (`tla <spec> <cfg>: <Name>`).
+- Pre-existing violations (listed in that spec's `known.json`, reported to stderr as `known, report-only`) get no test from you: they're backfill findings, report-only.
+- A `tla:<spec>:stale` finding or a guard failure (`bug no longer caught`, `event unreachable`) is not a counterexample: no trace to replay, so no test from this section.
+
 ## Test Conventions
 
 <!-- UPDATE: Replace with YOUR project's test conventions -->
 - Each test should test ONE behavior with a descriptive name
 - Include docstrings or comments describing the expected behavior
 - Cover happy path, edge cases, and error cases as specified in the task
+
+## Property, race and round-trip tests
+
+Read `~/.claude/references/property-tests.md` before writing tests for any change to TS/JS or Python code, and follow it. In short:
+- Every pure function the change touches gets a property test: `fc.assert(fc.property(...))` with plain `fast-check` in vitest, `@given` with Hypothesis in Python. Fresh inputs each run, never a pinned seed; arbitraries bounded near the boundary under test.
+- A property that fails: fix the code, then save the failing input in the same test (`examples` in fast-check, `@example` in Hypothesis).
+- Async code that reads shared state, awaits, then writes it back gets an `fc.scheduler()` race test.
+- Assert against what the producer computes (call it or round-trip through it), never a literal copied out of it.
+- First property test in a repo: set the run budget once in the vitest config's setup file (`fc.configureGlobal`) or the Python `conftest.py` profile, gitignore `.hypothesis/`, add the dev dependency. Never restate the budget in a test.
+- `check-wiring.sh` lists changed pure functions with no property test (stderr in warn mode, `property-coverage` findings in block mode). Act on every listed function in the same run: write its property test, or put `// @no-property-test: impure: <reason>` (the check got purity wrong) or `// @no-property-test: skip: <reason>` (pure, but a property adds nothing) on the line right above it (`#` in Python).
 
 ## Test Quality Rules
 
